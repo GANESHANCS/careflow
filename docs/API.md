@@ -46,33 +46,8 @@ List healthcare facilities with optional filtering and pagination.
 - `skip` *(optional, int, default=0)*: Pagination offset
 - `limit` *(optional, int, default=50, max=200)*: Items per page
 
-**Response Example (200 OK)**:
-```json
-{
-  "items": [
-    {
-      "id": "FC_1001",
-      "facility_code": "1001",
-      "facility_name": "District Hospital Alpha",
-      "facility_type": "DH",
-      "state": "State_A",
-      "district": "District_X",
-      "sub_district": null,
-      "raw_facility_name": "District Hospital Alpha",
-      "raw_district_name": "District_X"
-    }
-  ],
-  "total": 1,
-  "skip": 0,
-  "limit": 50
-}
-```
-
 #### `GET /api/facilities/{facility_id}`
 Get detailed metadata for a single facility by ID.
-
-**Error Responses**:
-- `404 Not Found`: Facility with specified ID does not exist.
 
 ---
 
@@ -80,21 +55,38 @@ Get detailed metadata for a single facility by ID.
 #### `GET /api/indicators`
 List registered HMIS indicators.
 
-**Query Parameters**:
-- `category` *(optional, string)*: Filter by operational category (e.g. `Outpatient Services`, `Maternal Health`)
-
 ---
 
 ### 4. Observations Timeseries API
 #### `GET /api/facilities/{facility_id}/observations`
 List monthly healthcare observations for a specific facility.
 
-**Query Parameters**:
-- `indicator_code` *(optional, string)*: Filter by indicator code (`opd_attendance`, `inpatient_admissions`, etc.)
-- `start_month` *(optional, string, YYYY-MM)*: Filter start month inclusive
-- `end_month` *(optional, string, YYYY-MM)*: Filter end month inclusive
-- `skip` *(optional, int, default=0)*: Pagination offset
-- `limit` *(optional, int, default=100, max=500)*: Items per page
+---
+
+### 5. Healthcare Analytics Engine API (`/api/analytics/`)
+
+#### `GET /api/analytics/summary`
+Executive summary metrics across active facilities and indicators.
+- **Parameters**: `state` *(optional)*, `district` *(optional)*
+
+#### `GET /api/analytics/trends`
+Monthly time-series aggregations (totals, averages, reporting facility count, completeness %).
+- **Parameters**: `indicator_code` *(optional)*, `state` *(optional)*, `district` *(optional)*, `facility_id` *(optional)*, `start_month` *(optional)*, `end_month` *(optional)*
+
+#### `GET /api/analytics/regional`
+State and District level utilization aggregations, average per reporting facility, median per reporting facility, and MoM growth.
+- **Parameters**: `level` *('state' or 'district', default='district')*, `indicator_code` *(optional)*, `state` *(optional)*, `district` *(optional)*, `reporting_month` *(optional)*
+
+#### `GET /api/analytics/facilities`
+Facility-level analytical details, historical indicator trends, reporting completeness, missing reporting periods, and MoM growth per indicator.
+- **Parameters**: `facility_id` *(required)*, `indicator_code` *(optional)*
+
+#### `GET /api/analytics/compare`
+Side-by-side facility benchmarking across a target indicator.
+- **Parameters**: `facility_ids` *(required, multi-value)*, `indicator_code` *(required)*, `start_month` *(optional)*, `end_month` *(optional)*
+
+#### `GET /api/analytics/data-quality`
+Database-backed data quality metrics, issue severity counts, issue category breakdowns, and incomplete reporting facility lists.
 
 ---
 
