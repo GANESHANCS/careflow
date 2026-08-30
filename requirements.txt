@@ -9,6 +9,8 @@ python-dotenv>=1.0.1
 # Data Foundation
 pandas>=2.2.0
 numpy>=1.26.0
+openpyxl>=3.1.2
+pyarrow>=15.0.0
 
 # Testing & Verification
 pytest>=8.0.0

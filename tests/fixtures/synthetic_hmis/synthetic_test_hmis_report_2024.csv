@@ -1,0 +1,5 @@
+State,District,Block,Facility Code,Facility Name,Facility Type,Reporting Month,OPD Attendance,Inpatient Admissions,Institutional Deliveries,ANC Visits,PNC Visits,Immunisation Coverage
+SYNTHETIC_State_A,SYNTHETIC_District_X,SYNTHETIC_Block_1,1001,SYNTHETIC District Hospital Alpha,District Hospital,2024-04,1250,340,85,210,180,195
+SYNTHETIC_State_A,SYNTHETIC_District_X,SYNTHETIC_Block_1,,  SYNTHETIC Primary Health Centre Beta  ,PHC,2024-04,480,NA,15,90,-,88
+SYNTHETIC_State_A,SYNTHETIC_District_Y,SYNTHETIC_Block_2,1003,SYNTHETIC Community Health Centre Gamma,CHC,2024-04,-50,0,45,120,110,115
+SYNTHETIC_State_A,SYNTHETIC_District_X,SYNTHETIC_Block_1,1001,SYNTHETIC District Hospital Alpha,District Hospital,2024-04,1250,340,85,210,180,195
