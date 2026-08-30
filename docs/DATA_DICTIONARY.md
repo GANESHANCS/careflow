@@ -51,3 +51,37 @@
 | `unit` | String | Measurement unit (`visits`, `admissions`, `deliveries`, `children`) |
 | `aliases` | List[String] | Recognized header aliases |
 | `regex_patterns` | List[String] | Recognized regex matching patterns |
+
+---
+
+## 4. Forecasts Timeseries Schema (`forecasts` Table)
+
+| Column Name | Data Type | Description |
+| :--- | :--- | :--- |
+| `id` | String (PK) | Unique composite ID (`fc_{facility_id}_{indicator_id}_{forecast_date}_{model_version}`) |
+| `facility_id` | String (FK) | References `facilities.id` |
+| `indicator_id` | String (FK) | References `indicators.id` |
+| `forecast_date` | String | ISO first day of forecast month (`YYYY-MM-01`) |
+| `predicted_value` | Float | Predicted metric count |
+| `lower_bound` | Float (Nullable)| 95% approximate prediction lower bound ($\ge 0.0$) |
+| `upper_bound` | Float (Nullable)| 95% approximate prediction upper bound |
+| `model_version` | String | Forecasting model version string (e.g. `1.0.0`) |
+
+---
+
+## 5. Model Metadata Registry Schema (`model_metadata` Table)
+
+| Column Name | Data Type | Description |
+| :--- | :--- | :--- |
+| `id` | String (PK) | Unique metadata ID (`meta_{model_version}_{target_indicator}`) |
+| `model_version` | String | Model version tag |
+| `model_type` | String | Winning model name (`Holt-Winters`, `SARIMAX`, `Ridge`, etc.) |
+| `target_indicator` | String | Target indicator code (`opd_attendance`, `inpatient_admissions`, etc.) |
+| `training_start` | String | Historical training start month (`YYYY-MM`) |
+| `training_end` | String | Historical training end month (`YYYY-MM`) |
+| `features` | JSON (Nullable) | Feature configuration and selection metadata |
+| `mae` | Float | Validation Mean Absolute Error |
+| `rmse` | Float | Validation Root Mean Squared Error |
+| `mape` | Float | Validation Mean Absolute Percentage Error |
+| `baseline_mae` | Float | Strongest baseline validation MAE benchmark |
+

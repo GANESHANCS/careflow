@@ -1,22 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --bg-primary: #090d16;
-    --bg-surface: #111827;
-    --bg-card: #1f2937;
-    --border-color: #374151;
-    --text-primary: #f9fafb;
-    --text-muted: #9ca3af;
-    --accent-emerald: #10b981;
-    --accent-blue: #3b82f6;
-  }
+:root {
+  /* Warm Ivory / Off-White Application Background & Surfaces */
+  --bg-app: #FAF9F5;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #FFFFFF;
+  --bg-surface-subtle: #F3F2EB;
+  --bg-surface-hover: #ECEBE3;
+  --bg-surface-active: #E4E3DA;
 
-  body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    margin: 0;
-    min-height: 100vh;
+  /* Typography / Text Palette (Dark Navy & Charcoal) */
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+  --text-on-accent: #FFFFFF;
+
+  /* Border & Divider Tokens */
+  --border-subtle: #E6E4DC;
+  --border-default: #D8D5C9;
+  --border-strong: #94A3B8;
+
+  /* Semantic Accent Families */
+  /* TEAL: Healthcare / System Activity */
+  --teal-50: #F0FDFA;
+  --teal-100: #CCFBF1;
+  --teal-500: #14B8A6;
+  --teal-600: #0D9488;
+  --teal-700: #0F766E;
+
+  /* BLUE: Information / Utilization */
+  --blue-50: #EFF6FF;
+  --blue-100: #DBEAFE;
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+  --blue-700: #1D4ED8;
+
+  /* PURPLE: Forecasting / ML Engine */
+  --purple-50: #F5F3FF;
+  --purple-100: #EDE9FE;
+  --purple-500: #8B5CF6;
+  --purple-600: #7C3AED;
+  --purple-700: #6D28D9;
+
+  /* GREEN: Healthy / Positive Operational Status */
+  --green-50: #ECFDF5;
+  --green-100: #D1FAE5;
+  --green-500: #10B981;
+  --green-600: #059669;
+  --green-700: #047857;
+
+  /* AMBER: Attention / Warning */
+  --amber-50: #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-500: #F59E0B;
+  --amber-600: #D97706;
+  --amber-700: #B45309;
+
+  /* CORAL: Critical / Urgent */
+  --coral-50: #FFF1F2;
+  --coral-100: #FFE4E6;
+  --coral-500: #F43F5E;
+  --coral-600: #E11D48;
+  --coral-700: #BE123C;
+
+  /* Shadows & Elevation */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-float: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+
+  /* Radius Tokens */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Font Families */
+  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Transitions */
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+/* Reduced Motion Compliance */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+}
+
+/* Accessibility Focus Ring Utility */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--teal-600);
+  outline-offset: 2px;
 }

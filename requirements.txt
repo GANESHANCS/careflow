@@ -8,11 +8,14 @@ alembic>=1.13.0
 psycopg[binary]>=3.1.1
 python-dotenv>=1.0.1
 
-# Data Foundation
+# Data Foundation & Machine Learning
 pandas>=2.2.0
 numpy>=1.26.0
 openpyxl>=3.1.2
 pyarrow>=15.0.0
+scikit-learn>=1.4.0
+statsmodels>=0.14.0
+
 
 # Testing & Verification
 pytest>=8.0.0
