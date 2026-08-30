@@ -1,39 +1,46 @@
-# CAREFlow Architecture Blueprint
+# CAREFlow System Architecture
 
-## System Overview
-CAREFlow India uses a clean, decoupled 3-tier architecture:
-1. **Presentation Layer**: React 18 + TypeScript SPA built with Vite.
-2. **Application & API Layer**: FastAPI REST Service with Pydantic schemas and async route handlers.
-3. **Data & Analytics Layer**: Normalized SQL Database (PostgreSQL) + Python ML & Time-Series Engine.
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              React 18 + TypeScript + Vite SPA               │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ JSON / HTTP REST APIs
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 FastAPI REST API Service                    │
-│   (App Router, OpenAPI Schemas, Pydantic V2 Validation)     │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │                              │
-               ▼                              ▼
-┌──────────────────────────────┐┌─────────────────────────────┐
-│   PostgreSQL / SQLAlchemy    ││  Python Data & ML Engine    │
-│ (Facilities, Observations,   ││ (Pandas, Scikit-learn,     │
-│  Forecasts, Indicators, MQ)  ││  Statsmodels Forecasting)   │
-└──────────────────────────────┘└─────────────────────────────┘
+                                    +-----------------------+
+                                    |    React / TS / Vite  |
+                                    |  Frontend Dashboard   |
+                                    +-----------+-----------+
+                                                |
+                                          HTTP / REST
+                                                v
+                                    +-----------------------+
+                                    |     FastAPI Engine    |
+                                    | (app/api/endpoints/)  |
+                                    +-----------+-----------+
+                                                |
+                                          Service Layer
+                                    (app/services/*_service)|
+                                                v
+                                        Repository Layer
+                                    (app/repositories/*_repo)
+                                                |
+                                          SQLAlchemy 2.0
+                                                v
+                                    +-----------------------+
+                                    |  PostgreSQL / SQLite  |
+                                    +-----------------------+
 ```
 
-## Data Schema Strategy (Extensible EAV/Timeseries Model)
-To support hundreds of HMIS indicators dynamically without schema rewrites, the database model uses an extensible entity-attribute-value timeseries architecture:
-- `facilities`: Facility metadata, region, district, facility type, ownership.
-- `indicators`: Dynamic catalog of HMIS indicators (OPD, Inpatient, Immunisation, Antenatal, etc.).
-- `observations`: Facility-level monthly report values with data-quality provenance flags.
-- `forecasts`: Time-series demand forecasts with confidence intervals and model signature references.
-- `model_metadata`: Model training signatures, parameters, and baseline comparison metrics.
+---
 
-## Data Directory Pipeline Layers
-- `data/raw/`: Immutable HMIS source Excel/CSV files.
-- `data/interim/`: Normalized and schema-validated intermediate datasets.
-- `data/processed/`: Deduplicated, entity-standardized datasets ready for database ingestion and ML feature engineering.
+## 4-Tier Backend Layering Pattern
+
+1. **API Router / Endpoints Layer (`backend/app/api/`)**:
+   - Handles HTTP route registration, query parameter validation (via Pydantic schemas), and exception handling.
+   - Database queries are **never** executed directly in route handlers.
+
+2. **Service Layer (`backend/app/services/`)**:
+   - Encapsulates business logic, data loaders, pipeline runners, and indicator seeders.
+
+3. **Repository Layer (`backend/app/repositories/`)**:
+   - Abstracts database queries, complex filters, joins, and pagination.
+
+4. **Data Access Layer (`backend/app/db/`)**:
+   - SQLAlchemy 2.0 ORM models (`backend/app/db/models/`), SessionLocal factory, and Alembic migrations.

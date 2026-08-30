@@ -1,15 +1,33 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
 from backend.app.api.router import api_router
+from backend.app.db.session import engine, SessionLocal
+from backend.app.db.models.base import Base
+from backend.app.db.seed import seed_standard_indicators
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Safe non-destructive schema initialization for local environment
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_standard_indicators(db)
+    finally:
+        db.close()
+    yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc"
+    redoc_url=f"{settings.API_V1_STR}/redoc",
+    lifespan=lifespan
 )
 
 # Enable CORS for frontend integration
