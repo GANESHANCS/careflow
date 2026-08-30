@@ -1,6 +1,7 @@
 import type {
   SystemHealth,
   Facility,
+  FacilityListResponse,
   Indicator,
   AnalyticsSummary,
   AnalyticsTrendsResponse,
@@ -73,7 +74,7 @@ export const api = {
     if (params?.skip !== undefined) query.append('skip', String(params.skip));
     if (params?.limit !== undefined) query.append('limit', String(params.limit));
     const qStr = query.toString();
-    return fetchJson<Facility[]>(`/facilities${qStr ? `?${qStr}` : ''}`);
+    return fetchJson<FacilityListResponse | Facility[]>(`/facilities${qStr ? `?${qStr}` : ''}`);
   },
 
   getFacilityById: (id: string) => fetchJson<Facility>(`/facilities/${id}`),

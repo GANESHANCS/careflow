@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 6C — EXECUTIVE OVERVIEW + OPERATIONAL INTELLIGENCE (COMPLETE)
+## Current Phase: PHASE 6D — FACILITY INTELLIGENCE (COMPLETE)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -12,6 +12,7 @@
 - **PHASE 6A (Design System & Core UI Foundation)**: Complete & Verified.
 - **PHASE 6B (Cinematic Landing Experience)**: Complete & Verified.
 - **PHASE 6C (Executive Overview & Operational Intelligence)**: Complete & Verified.
+- **PHASE 6D (Facility Intelligence Directory & Profile)**: Complete & Verified.
 
 ---
 

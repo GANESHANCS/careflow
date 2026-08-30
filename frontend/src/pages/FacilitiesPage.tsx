@@ -1,132 +1,147 @@
-import React, { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { InteractiveHeading } from '../components/typography/InteractiveHeading';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
-import { Button } from '../components/buttons/Button';
-import { EmptyState } from '../components/feedback/EmptyState';
 import { LoadingState } from '../components/feedback/LoadingState';
 import { ErrorState } from '../components/feedback/ErrorState';
+import { EmptyState } from '../components/feedback/EmptyState';
 import { api } from '../api/client';
-import type { Facility } from '../api/types';
-import { Search, ArrowRight, Filter } from 'lucide-react';
+import type { Facility, FacilityListResponse } from '../api/types';
+import { FacilityFilters } from '../components/facilities/FacilityFilters';
+import { FacilityListTable } from '../components/facilities/FacilityListTable';
 
 export const FacilitiesPage: React.FC = () => {
   const [facilities, setFacilities] = useState<Facility[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedState, setSelectedState] = useState<string>('');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string>('');
 
   const fetchFacilities = () => {
     setLoading(true);
     setError(null);
-    api.getFacilities({ limit: 50 })
-      .then((data) => {
-        setFacilities(Array.isArray(data) ? data : []);
+
+    const params = {
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
+      facility_type: selectedType || undefined,
+      limit: 100,
+    };
+
+    api.getFacilities(params)
+      .then((res: FacilityListResponse | Facility[]) => {
+        if (Array.isArray(res)) {
+          setFacilities(res);
+        } else if (res && Array.isArray(res.items)) {
+          setFacilities(res.items);
+        } else {
+          setFacilities([]);
+        }
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || 'Failed to retrieve facilities list.');
+        setError(err instanceof Error ? err.message : 'Failed to retrieve facilities list.');
         setLoading(false);
       });
   };
 
   useEffect(() => {
     fetchFacilities();
-  }, []);
+  }, [selectedState, selectedDistrict, selectedType]);
 
-  const safeFacilities = Array.isArray(facilities) ? facilities : [];
-  const filteredFacilities = safeFacilities.filter(f =>
-    (f?.facility_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (f?.district || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (f?.facility_type || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Client-side text search on fetched list
+  const filteredFacilities = useMemo(() => {
+    return facilities.filter((fac) => {
+      const query = searchQuery.toLowerCase();
+      const nameMatch = (fac.facility_name || '').toLowerCase().includes(query);
+      const codeMatch = (fac.facility_code || fac.id || '').toLowerCase().includes(query);
+      const distMatch = (fac.district || '').toLowerCase().includes(query);
+      return nameMatch || codeMatch || distMatch;
+    });
+  }, [facilities, searchQuery]);
+
+  // Derive dynamic filter lists from actual data
+  const statesList = useMemo(() => {
+    return Array.from(new Set(facilities.map((f) => f.state).filter(Boolean))).sort();
+  }, [facilities]);
+
+  const districtsList = useMemo(() => {
+    return Array.from(new Set(facilities.map((f) => f.district).filter(Boolean))).sort();
+  }, [facilities]);
+
+  const typesList = useMemo(() => {
+    return Array.from(new Set(facilities.map((f) => f.facility_type).filter(Boolean))).sort();
+  }, [facilities]);
+
+  const handleReset = () => {
+    setSearchQuery('');
+    setSelectedState('');
+    setSelectedDistrict('');
+    setSelectedType('');
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+      {/* Editorial Header */}
       <ScrollReveal>
-        <InteractiveHeading
-          title="Facility Intelligence Directory"
-          subtitle="Explore District Hospitals, CHCs, PHCs, and Sub-Centers tracked under CAREFlow"
-          badge="Facilities"
-          badgeColor="blue"
+        <header className="border-b border-[var(--border-subtle)] pb-6 mb-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[var(--teal-700)] mb-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--teal-500)] animate-pulse" />
+            <span>CAREFLOW</span>
+            <span className="text-[var(--text-subtle)]">/</span>
+            <span>FACILITIES</span>
+          </div>
+
+          <h1 className="font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl text-[var(--text-primary)] tracking-tight leading-[1.15]">
+            Facility Intelligence Directory
+          </h1>
+
+          <p className="mt-2 text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl font-normal leading-relaxed">
+            Search, filter, and inspect operational telemetry, monthly reporting completeness, and predictive readiness across healthcare facilities.
+          </p>
+        </header>
+      </ScrollReveal>
+
+      {/* Filter Controls Bar */}
+      <ScrollReveal delay={0.05}>
+        <FacilityFilters
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedState={selectedState}
+          onStateChange={setSelectedState}
+          selectedDistrict={selectedDistrict}
+          onDistrictChange={setSelectedDistrict}
+          selectedType={selectedType}
+          onTypeChange={setSelectedType}
+          onReset={handleReset}
+          statesList={statesList}
+          districtsList={districtsList}
+          typesList={typesList}
         />
       </ScrollReveal>
 
-      {/* Filter / Search Bar */}
-      <ScrollReveal delay={0.1}>
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <div className="flex items-center relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by facility name, district, or type..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-primary)] focus:border-[var(--blue-600)] transition-colors focus-ring"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" leftIcon={<Filter className="w-3.5 h-3.5" />}>
-              Filter Type
-            </Button>
-          </div>
-        </div>
-      </ScrollReveal>
-
       {/* Content Section */}
-      <ScrollReveal delay={0.2}>
+      <ScrollReveal delay={0.1}>
         {loading ? (
           <LoadingState type="table" />
         ) : error ? (
           <ErrorState message={error} onRetry={fetchFacilities} />
         ) : filteredFacilities.length === 0 ? (
           <EmptyState
-            title="NO FACILITIES FOUND"
-            description="No healthcare facilities matched your current search parameters or database query."
-            actionText="Clear Search"
-            onAction={() => setSearchQuery('')}
+            title={facilities.length > 0 ? 'NO MATCHING FACILITIES FOUND' : 'NO VERIFIED HMIS FACILITIES LOADED'}
+            description={
+              facilities.length > 0
+                ? 'No healthcare facilities matched your active search query or filter parameters.'
+                : 'Healthcare facility observations have not been loaded into the database yet.'
+            }
+            actionText={facilities.length > 0 ? 'Reset Search Filters' : undefined}
+            onAction={facilities.length > 0 ? handleReset : undefined}
             icon="search"
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredFacilities.map((facility) => (
-              <div
-                key={facility.id}
-                className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs hover:shadow-md hover:border-[var(--blue-500)] transition-all duration-200 group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[var(--blue-50)] text-[var(--blue-700)] border border-[var(--blue-100)] uppercase">
-                      {facility.facility_type}
-                    </span>
-                    <span className="text-xs text-[var(--text-muted)] font-mono">
-                      {facility.facility_code || facility.id}
-                    </span>
-                  </div>
-
-                  <h3 className="font-display font-bold text-base text-[var(--text-primary)] group-hover:text-[var(--blue-600)] transition-colors mb-1">
-                    {facility.facility_name}
-                  </h3>
-
-                  <p className="text-xs text-[var(--text-secondary)] mb-4">
-                    {facility.district}, {facility.state}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
-                  <span>View Details</span>
-                  <NavLink
-                    to={`/facilities/${facility.id}`}
-                    className="p-1.5 rounded-lg bg-[var(--bg-surface-subtle)] group-hover:bg-[var(--blue-600)] group-hover:text-white transition-colors focus-ring"
-                    aria-label={`View details for ${facility.facility_name}`}
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </NavLink>
-                </div>
-              </div>
-            ))}
-          </div>
+          <FacilityListTable facilities={filteredFacilities} />
         )}
       </ScrollReveal>
     </div>

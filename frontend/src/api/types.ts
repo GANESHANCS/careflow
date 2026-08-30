@@ -27,6 +27,13 @@ export interface Facility {
   raw_district_name?: string;
 }
 
+export interface FacilityListResponse {
+  items: Facility[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 export interface Indicator {
   id: string;
   code: string;
