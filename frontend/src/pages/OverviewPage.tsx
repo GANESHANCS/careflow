@@ -1,145 +1,181 @@
-import React, { useEffect, useState } from 'react';
-import { InteractiveHeading } from '../components/typography/InteractiveHeading';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
-import { EmptyState } from '../components/feedback/EmptyState';
-import { LoadingState } from '../components/feedback/LoadingState';
 import { ErrorState } from '../components/feedback/ErrorState';
-import { ChartContainer } from '../components/charts/ChartContainer';
 import { ContextualPopup } from '../components/overlays/ContextualPopup';
 import { api } from '../api/client';
-import type { AnalyticsSummary } from '../api/types';
-import { Activity, Building2, ShieldAlert, TrendingUp } from 'lucide-react';
+import type {
+  AnalyticsSummary,
+  AnalyticsTrendsResponse,
+  RegionalAnalyticsResponse,
+  DataQualityAnalyticsResponse,
+} from '../api/types';
+
+import { OverviewHeader } from '../components/overview/OverviewHeader';
+import { OverviewFilters } from '../components/overview/OverviewFilters';
+import { SystemPulse } from '../components/overview/SystemPulse';
+import { TrendChart } from '../components/overview/TrendChart';
+import { RegionalSignal } from '../components/overview/RegionalSignal';
+import { DataReliability } from '../components/overview/DataReliability';
+import { AttentionPanel } from '../components/overview/AttentionPanel';
 
 export const OverviewPage: React.FC = () => {
+  // State for API endpoints
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [trends, setTrends] = useState<AnalyticsTrendsResponse | null>(null);
+  const [regional, setRegional] = useState<RegionalAnalyticsResponse | null>(null);
+  const [quality, setQuality] = useState<DataQualityAnalyticsResponse | null>(null);
 
-  const fetchSummary = () => {
+  // Filter state
+  const [selectedIndicator, setSelectedIndicator] = useState<string>('');
+  const [selectedState, setSelectedState] = useState<string>('');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [regionalLevel, setRegionalLevel] = useState<'state' | 'district'>('state');
+
+  // Loading & Error states
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState<boolean>(false);
+
+  // Fetch all analytics APIs in parallel
+  const fetchDashboardData = useCallback(() => {
     setLoading(true);
     setError(null);
-    api.getAnalyticsSummary()
-      .then((data) => {
-        setSummary(data);
+
+    const summaryParams = {
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
+    };
+
+    const trendParams = {
+      indicator_code: selectedIndicator || undefined,
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
+    };
+
+    const regionalParams = {
+      level: regionalLevel,
+      indicator_code: selectedIndicator || undefined,
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
+    };
+
+    Promise.all([
+      api.getAnalyticsSummary(summaryParams),
+      api.getAnalyticsTrends(trendParams),
+      api.getRegionalAnalytics(regionalParams),
+      api.getDataQualityAnalytics(),
+    ])
+      .then(([summaryRes, trendsRes, regionalRes, qualityRes]) => {
+        setSummary(summaryRes);
+        setTrends(trendsRes);
+        setRegional(regionalRes);
+        setQuality(qualityRes);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || 'Unable to connect to analytics engine.');
+        setError(err instanceof Error ? err.message : 'Unable to load CAREFlow overview data.');
         setLoading(false);
       });
-  };
+  }, [selectedIndicator, selectedState, selectedDistrict, regionalLevel]);
 
   useEffect(() => {
-    fetchSummary();
-  }, []);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const handleResetFilters = () => {
+    setSelectedIndicator('');
+    setSelectedState('');
+    setSelectedDistrict('');
+    setRegionalLevel('state');
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Header Section */}
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+      {/* Editorial Header */}
       <ScrollReveal>
-        <InteractiveHeading
-          title="Executive Healthcare Overview"
-          subtitle="Real-time Operational Intelligence & System Health across Healthcare Facilities in India"
-          badge="Executive Summary"
-          badgeColor="teal"
-          actionText="View System Methodology"
-          onActionClick={() => setIsPopupOpen(true)}
+        <OverviewHeader
+          latestPeriod={summary?.latest_period ?? null}
+          totalFacilities={summary?.total_facilities ?? 0}
+          reportingCompletenessPct={summary?.reporting_completeness_pct ?? 0}
+          onMethodologyClick={() => setIsMethodologyOpen(true)}
         />
       </ScrollReveal>
 
-      {/* Editorial Key Stat Metrics Bar */}
-      <ScrollReveal delay={0.1}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs transition-transform duration-200 hover:-translate-y-0.5">
-            <div className="flex items-center justify-between text-[var(--text-muted)] text-xs font-medium mb-1">
-              <span>Active Facilities</span>
-              <Building2 className="w-4 h-4 text-[var(--teal-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : summary?.active_facilities ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green-500)]" />
-              <span>Registered HMIS Outlets</span>
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs transition-transform duration-200 hover:-translate-y-0.5">
-            <div className="flex items-center justify-between text-[var(--text-muted)] text-xs font-medium mb-1">
-              <span>Tracked Indicators</span>
-              <Activity className="w-4 h-4 text-[var(--blue-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : summary?.total_indicators ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              OPD, IPD, Deliveries & Care
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs transition-transform duration-200 hover:-translate-y-0.5">
-            <div className="flex items-center justify-between text-[var(--text-muted)] text-xs font-medium mb-1">
-              <span>Total Observations</span>
-              <TrendingUp className="w-4 h-4 text-[var(--purple-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : summary?.total_observations ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Monthly Time-Series Records
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs transition-transform duration-200 hover:-translate-y-0.5">
-            <div className="flex items-center justify-between text-[var(--text-muted)] text-xs font-medium mb-1">
-              <span>Reporting Completeness</span>
-              <ShieldAlert className="w-4 h-4 text-[var(--amber-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : `${summary?.overall_reporting_completeness_pct ?? 0}%`}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Expected Reporting Rate
-            </div>
-          </div>
-        </div>
+      {/* Filter Controls Bar */}
+      <ScrollReveal delay={0.05}>
+        <OverviewFilters
+          selectedIndicator={selectedIndicator}
+          selectedState={selectedState}
+          selectedDistrict={selectedDistrict}
+          onIndicatorChange={setSelectedIndicator}
+          onStateChange={setSelectedState}
+          onDistrictChange={setSelectedDistrict}
+          onReset={handleResetFilters}
+        />
       </ScrollReveal>
 
-      {/* Main Section Content Area */}
-      <ScrollReveal delay={0.2}>
-        {loading ? (
-          <LoadingState type="chart" />
-        ) : error ? (
-          <ErrorState message={error} onRetry={fetchSummary} />
-        ) : summary && summary.total_observations > 0 ? (
-          <ChartContainer title="National Monthly Healthcare Attendance Trend" status="success">
-            <div className="h-64 flex items-center justify-center text-[var(--text-secondary)] text-sm font-medium">
-              Observation Data Present (Chart Visualizer Ready)
-            </div>
-          </ChartContainer>
-        ) : (
-          <EmptyState
-            title="NO HMIS OBSERVATIONS LOADED"
-            description="The CAREFlow analytics engine is connected to the backend database. To view real monthly attendance trends, place HMIS source files under data/raw/ and run the ingestion pipeline."
-            actionText="Refresh Analytics"
-            onAction={fetchSummary}
-          />
-        )}
-      </ScrollReveal>
+      {/* Main Content / Error Boundary View */}
+      {error ? (
+        <ErrorState message={error} onRetry={fetchDashboardData} />
+      ) : (
+        <>
+          {/* Section 1: System Pulse (Dominant Primary Metric & Supporting Rows) */}
+          <ScrollReveal delay={0.1}>
+            <SystemPulse summary={summary} loading={loading} />
+          </ScrollReveal>
 
-      {/* Contextual Popup Trigger Modal */}
+          {/* Section 2: Time-Series Trend Chart */}
+          <ScrollReveal delay={0.15}>
+            <TrendChart
+              data={trends}
+              loading={loading}
+              title={selectedIndicator ? `Monthly Attendance: ${selectedIndicator}` : 'Monthly Healthcare Attendance Movement'}
+            />
+          </ScrollReveal>
+
+          {/* Section 3: Regional Intelligence Signal */}
+          <ScrollReveal delay={0.2}>
+            <RegionalSignal
+              data={regional}
+              loading={loading}
+              activeLevel={regionalLevel}
+              onLevelChange={setRegionalLevel}
+            />
+          </ScrollReveal>
+
+          {/* Section 4 & 5: Data Reliability & Attention Panel */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-6">
+              <ScrollReveal delay={0.25}>
+                <DataReliability data={quality} loading={loading} />
+              </ScrollReveal>
+            </div>
+            <div className="lg:col-span-6">
+              <ScrollReveal delay={0.3}>
+                <AttentionPanel summary={summary} quality={quality} loading={loading} />
+              </ScrollReveal>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Governance & Methodology Modal */}
       <ContextualPopup
-        isOpen={isPopupOpen}
-        onClose={() => setIsPopupOpen(false)}
-        title="CAREFlow Operational Governance"
+        isOpen={isMethodologyOpen}
+        onClose={() => setIsMethodologyOpen(false)}
+        title="CAREFlow Operational & Methodological Governance"
       >
-        <p className="mb-3">
-          The CAREFlow platform applies strict time-series data contracts and diagnostic eligibility checks to operational healthcare data.
-        </p>
-        <p>
-          Models evaluate historical OPD, IPD, and delivery trends using expanding window validation to prevent any data leakage.
-        </p>
+        <div className="space-y-3 text-xs text-[var(--text-secondary)]">
+          <p>
+            The CAREFlow operational platform processes raw monthly HMIS observations across outpatient attendance, inpatient admissions, deliveries, and preventive care.
+          </p>
+          <p>
+            Data completeness rates and month-over-month growth calculations enforce zero-fabrication policies. If observations are unverified or awaiting raw return ingestion, features degrade gracefully into diagnostic audit states.
+          </p>
+          <p className="font-semibold text-[var(--text-primary)]">
+            Baseline Primacy: Candidates must beat seasonal naive benchmarks before being selected for deployment.
+          </p>
+        </div>
       </ContextualPopup>
     </div>
   );

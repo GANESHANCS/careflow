@@ -38,65 +38,131 @@ export interface Indicator {
 }
 
 export interface AnalyticsSummary {
+  latest_period: string | null;
+  previous_period: string | null;
   total_facilities: number;
-  active_facilities: number;
-  total_indicators: number;
-  latest_month: string | null;
-  total_observations: number;
-  overall_reporting_completeness_pct: number;
+  reporting_facilities: number;
+  reporting_completeness_pct: number;
+  totals_by_indicator: Record<string, number>;
+  indicator_names: Record<string, string>;
+  mom_changes: Record<string, number | null>;
 }
 
 export interface MonthlyTrendPoint {
   reporting_month: string;
   observation_date: string;
   total_value: number;
-  average_value: number;
+  average_per_facility: number;
   reporting_facilities: number;
+  total_facilities: number;
   completeness_pct: number;
+  observation_count: number;
+}
+
+export interface MonthlyTrendsFilter {
+  indicator_code?: string | null;
+  state?: string | null;
+  district?: string | null;
+  facility_id?: string | null;
+  start_month?: string | null;
+  end_month?: string | null;
 }
 
 export interface AnalyticsTrendsResponse {
-  indicator_code: string;
-  total_months: number;
-  trends: MonthlyTrendPoint[];
+  filters: MonthlyTrendsFilter;
+  total_facilities: number;
+  series: MonthlyTrendPoint[];
 }
 
-export interface RegionalMetric {
+export interface RegionMetricPoint {
   region_name: string;
-  state: string;
-  district: string | null;
+  level: string;
+  reporting_month: string;
+  total_facilities: number;
+  reporting_facilities: number;
+  completeness_pct: number;
   total_utilization: number;
-  average_per_facility: number;
-  median_per_facility: number;
-  reporting_facilities_count: number;
-  mom_growth_pct: number | null;
+  average_per_reporting_facility: number;
+  median_per_reporting_facility: number;
+  mom_change_pct: number | null;
 }
 
 export interface RegionalAnalyticsResponse {
-  aggregation_level: 'state' | 'district';
-  indicator_code: string;
+  level: string;
   reporting_month: string | null;
-  regions: RegionalMetric[];
+  indicator_code: string | null;
+  regions: RegionMetricPoint[];
+}
+
+export interface FacilityLatestMetric {
+  indicator_code: string;
+  indicator_name: string;
+  latest_reporting_month: string;
+  latest_value: number | null;
+  value_type: string;
+  previous_value: number | null;
+  mom_change_pct: number | null;
+}
+
+export interface FacilityObservationPoint {
+  reporting_month: string;
+  observation_date: string;
+  indicator_code: string;
+  indicator_name: string;
+  value: number | null;
+  value_type: string;
 }
 
 export interface FacilityAnalyticsResponse {
-  facility: Facility;
-  reporting_completeness_pct: number;
-  missing_months_count: number;
-  indicators_tracked: number;
-  recent_trends: Record<string, MonthlyTrendPoint[]>;
+  facility_id: string;
+  facility_code: string | null;
+  facility_name: string;
+  facility_type: string;
+  state: string;
+  district: string;
+  sub_district: string | null;
+  total_expected_months: number;
+  reported_months_count: number;
+  completeness_pct: number;
+  reporting_completeness_pct?: number;
+  missing_months: string[];
+  latest_metrics: FacilityLatestMetric[];
+  history: FacilityObservationPoint[];
+}
+
+export interface DataQualityIssueItem {
+  id: string;
+  audit_timestamp: string;
+  category: string;
+  severity: string;
+  affected_records: number;
+  description: string;
+}
+
+export interface IncompleteFacilityItem {
+  facility_id: string;
+  facility_name: string;
+  state: string;
+  district: string;
+  reported_months: number;
+  expected_months: number;
+  completeness_pct: number;
 }
 
 export interface DataQualityAnalyticsResponse {
-  total_observations: number;
-  valid_count: number;
-  missing_count: number;
-  zero_count: number;
-  invalid_count: number;
-  imputed_count: number;
   overall_quality_score: number;
-  completeness_rate_pct: number;
-  critical_issues_count: number;
+  total_issues: number;
+  severity_counts: Record<string, number>;
+  category_counts: Record<string, number>;
+  incomplete_facilities_count: number;
+  incomplete_facilities: IncompleteFacilityItem[];
+  issues: DataQualityIssueItem[];
+  total_observations?: number;
+  valid_count?: number;
+  missing_count?: number;
+  zero_count?: number;
+  invalid_count?: number;
+  imputed_count?: number;
 }
 
 export interface ForecastPoint {

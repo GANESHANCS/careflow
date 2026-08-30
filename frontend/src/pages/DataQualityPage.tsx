@@ -105,7 +105,7 @@ export const DataQualityPage: React.FC = () => {
           <LoadingState type="table" />
         ) : error ? (
           <ErrorState message={error} onRetry={fetchQualityData} />
-        ) : data && data.total_observations > 0 ? (
+        ) : data && (data.total_observations ?? 0) > 0 ? (
           <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-6">
             <h3 className="font-display font-bold text-base mb-4">Data Quality Breakdown</h3>
             {/* Table visualization ready */}
