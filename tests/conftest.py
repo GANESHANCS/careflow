@@ -68,3 +68,35 @@ def auth_headers(db_session):
     db_session.commit()
     token = create_access_token(subject=user.id, role=user.role)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def admin_auth_headers(db_session):
+    """Generates valid Bearer authentication headers for a seeded test admin user."""
+    user = User(
+        username="test_admin",
+        email="admin@careflow.gov.in",
+        hashed_password=hash_password("Password123!"),
+        role="ADMIN",
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    token = create_access_token(subject=user.id, role=user.role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def viewer_auth_headers(db_session):
+    """Generates valid Bearer authentication headers for a seeded test viewer user."""
+    user = User(
+        username="test_viewer",
+        email="viewer@careflow.gov.in",
+        hashed_password=hash_password("Password123!"),
+        role="VIEWER",
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    token = create_access_token(subject=user.id, role=user.role)
+    return {"Authorization": f"Bearer {token}"}

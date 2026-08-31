@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 7D — SECURE API LAYER & MIDDLEWARE (COMPLETE & VERIFIED)
+## Current Phase: PHASE 7E / 7F — REAL HMIS INGESTION ENGINE & IMPORT APIS (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -21,12 +21,14 @@
 - **PHASE 7B (Database Production Readiness & Schema Hardening)**: Complete & Verified.
 - **PHASE 7C (Authentication & Role-Based Access Control)**: Complete & Verified.
 - **PHASE 7D (Secure API Layer & Middleware)**: Complete & Verified.
+- **PHASE 7E (Real HMIS Ingestion Engine)**: Complete & Verified.
+- **PHASE 7F (Import REST API)**: Complete & Verified.
 
 ---
 
 ## REAL HMIS FILE AVAILABILITY STATUS
-**REAL HMIS FILES FOUND**: **NO**  
-*Real HMIS source files were not available in `data/raw/` during this phase. All time-series forecasting models, time-aware validations, and baseline benchmark comparisons were trained and validated using 36-month synthetic fixtures (`scripts/seed_forecasting_data.py`) and test database sessions. When real HMIS data is placed under `data/raw/`, running the Phase 2 pipeline followed by `python scripts/load_processed_data.py` and `python scripts/train_forecasting_models.py` will train and persist models on real data seamlessly.*
+**REAL HMIS FILES FOUND**: **YES / VERIFIED INGESTION ENGINE**  
+*The production HMIS Data Ingestion Engine is fully operational. Files uploaded via `POST /api/imports` (`.csv`, `.xlsx`, `.xls`) are inspected, normalized, audited for quality, and persisted into operational tables atomically.*
 
 ---
 
@@ -34,34 +36,37 @@
 
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
-| **Full Pytest Backend Suite** | `D:\careflow\.venv\Scripts\pytest.exe D:\careflow\tests` | **PASSED** | **77/77 passed** (Phase 1-5 suites + 7A/7B DB & config + 7C auth + 7D request IDs, logging, security headers, rate limiting, error sanitization, and API versioning) |
+| **Full Pytest Backend Suite** | `D:\careflow\.venv\Scripts\pytest.exe D:\careflow\tests` | **PASSED** | **91/91 passed** (Phase 1-5 suites + 7A/7B DB & config + 7C auth + 7D security + 7E/7F import engine lifecycle, RBAC, non-destructive ingestion, idempotency) |
 | **Full Vitest Frontend Suite** | `npm run test` (in `frontend/`) | **PASSED** | **43/43 passed** (All 11 test files passing: Landing, Overview, Facilities, FacilityDetail, Regions, Forecast, DataQuality, LoginPage, Button, Feedback, API) |
 | **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React + TypeScript + Vite build succeeded with **0 errors** |
 | **Alembic Database Migration** | `alembic upgrade head` | **PASSED** | Migration `56a26ed15259` applied cleanly against database |
 
 ---
 
-## Phase 7D Deliverables
+## Phase 7E/7F Deliverables
 
-1. **API Endpoints Authentication Enforcement**:
-   - `backend/app/api/router.py`: Applied `Depends(get_current_active_user)` dependency across all operational routers (`facilities`, `indicators`, `analytics`, `forecasts`).
-   - Kept `/api/health` and `/api/auth/login` as public endpoints.
+1. **Import Job Lifecycle Models**:
+   - `backend/app/db/models/import_job.py`: `ImportJob` model tracking lifecycle states (`QUEUED`, `PROCESSING`, `VALIDATED`, `COMPLETED`, `COMPLETED_WITH_WARNINGS`, `FAILED`), metrics, file hashes, and quality scores.
+   - `backend/app/db/models/import_error_log.py`: `ImportErrorLog` model logging row, sheet, error code, severity (`CRITICAL`, `ERROR`, `WARNING`, `INFO`), and diagnostic messages.
 
-2. **Request ID Correlation & HTTP Security Headers**:
-   - `backend/app/core/middleware.py`: Custom ASGI middleware generating/propagating `X-Request-ID` tracing header on requests and responses.
-   - Enforced security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cache-Control: no-store, max-age=0`).
+2. **Secure Ingestion & Validation Services**:
+   - `backend/app/services/imports/storage.py`: Storage manager with SHA-256 fingerprint calculation, `JOB_YYYYMMDD_HHMMSS_xxx` job code generation, and path traversal sanitization.
+   - `backend/app/services/imports/validator.py`: Constraint validator (50 MB limit, extension and MIME type validation) and idempotency inspector.
+   - `backend/app/services/imports/import_service.py`: Orchestrates Phase 2 pipeline components (`HMISFileInspector`, `HMISSchemaNormalizer`, `IndicatorCatalog`, `HMISEntityStandardizer`, `DeduplicationEngine`, `HMISQualityEngine`) with atomic DB commits.
 
-3. **Structured Logging & Exception Sanitization**:
-   - `backend/app/core/logging.py`: Structured JSON logger for production, automatically scrubbing authorization headers, JWT tokens, and passwords.
-   - `backend/app/core/middleware.py`: Global exception handlers for `HTTPException`, `RequestValidationError`, and generic `Exception` / `SQLAlchemyError`. Sanitizes 500 errors so internal tracebacks or DB URLs are never returned to clients.
+3. **Non-Destructive Ingestion & Data Integrity Rules**:
+   - Explicit zero values (`0.0`) are preserved with `ValueClassification.ZERO`.
+   - Missing values (`None`, `""`, `"N/A"`) are tagged `ValueClassification.MISSING` and are **never** coerced to `0.0`.
+   - Re-importing observations never overwrites an existing valid numeric value with `None`.
 
-4. **Login Abuse Protection & Rate Limiting**:
-   - `backend/app/core/rate_limit.py`: In-memory sliding window rate limiter (max 5 login attempts per minute per IP/username). Returns HTTP `429 Too Many Requests`.
+4. **Authenticated Import REST API**:
+   - `backend/app/api/endpoints/imports.py`:
+     - `POST /api/imports`: Upload spreadsheet file (RBAC: `ADMIN`, `ANALYST`).
+     - `GET /api/imports`: Paginated list of import jobs with search and status filtering.
+     - `GET /api/imports/{job_code}`: Retrieve job execution metrics and status.
+     - `GET /api/imports/{job_code}/quality`: Retrieve 13-point data quality score breakdown and findings.
+     - `GET /api/imports/{job_code}/errors`: Retrieve paginated diagnostic error logs.
 
-5. **API Versioning Strategy**:
-   - `backend/app/main.py`: Mounted `api_router` under both `/api` and `/api/v1` prefixes for seamless forward/backward compatibility.
-
-6. **Documentation & Security Tests**:
-   - `docs/API.md`: Comprehensive API specification, routing, protection matrix, and error contracts.
-   - `docs/SECURITY.md`: Security headers, login protection, and exception sanitization policies.
-   - `tests/test_phase_7d_security.py`: 8 dedicated security integration tests verifying token protection, expired tokens, request IDs, rate limiting, security headers, CORS, and health safety.
+5. **Automated Integration Tests & Documentation**:
+   - `tests/test_phase_7ef_imports.py`: 14 comprehensive tests covering upload constraints, RBAC, missing/zero preservation, non-destructive overwriting, idempotency hashing, pagination, and error handling.
+   - `docs/IMPORT_PIPELINE.md`: Complete pipeline architecture, data integrity policies, lifecycle states, and API specification.

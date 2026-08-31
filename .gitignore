@@ -35,6 +35,8 @@ data/interim/*
 !data/interim/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
 *.sqlite
 *.sqlite3
 *.db

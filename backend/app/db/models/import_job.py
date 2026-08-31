@@ -21,6 +21,7 @@ class ImportJob(Base):
     file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     storage_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True, nullable=True)
 
     # Lifecycle states: QUEUED, PROCESSING, VALIDATED, COMPLETED, COMPLETED_WITH_WARNINGS, FAILED
     status: Mapped[str] = mapped_column(String(50), default="QUEUED", index=True, nullable=False)
