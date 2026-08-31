@@ -109,7 +109,7 @@ export const ForecastEmptyState: React.FC<ForecastEmptyStateProps> = ({
       </h3>
 
       <p className="text-xs text-[var(--text-muted)] mt-2 max-w-md mx-auto">
-        {errorMessage || 'Unable to connect to CAREFlow backend API forecasting service.'}
+        {errorMessage || reasonMessage || 'Unable to connect to CAREFlow backend API forecasting service.'}
       </p>
 
       {onRetry && (

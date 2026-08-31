@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
+import { PageTransition } from '../components/motion/PageTransition';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { ContextualPopup } from '../components/overlays/ContextualPopup';
 import { api } from '../api/client';
@@ -90,7 +91,7 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+    <PageTransition className="space-y-8 max-w-7xl mx-auto pb-12">
       {/* Editorial Header */}
       <ScrollReveal>
         <OverviewHeader
@@ -177,6 +178,7 @@ export const OverviewPage: React.FC = () => {
           </p>
         </div>
       </ContextualPopup>
-    </div>
+    </PageTransition>
   );
 };
+

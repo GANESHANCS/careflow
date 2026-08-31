@@ -13,6 +13,7 @@ import { QualityTimeline } from '../components/data-quality/QualityTimeline';
 import { QualityAttention } from '../components/data-quality/QualityAttention';
 import { QualityMethodology } from '../components/data-quality/QualityMethodology';
 
+import { PageTransition } from '../components/motion/PageTransition';
 import { LoadingState } from '../components/feedback/LoadingState';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { RefreshCw, Database } from 'lucide-react';
@@ -71,7 +72,7 @@ export const DataQualityPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
+    <PageTransition className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* 1. Editorial Header */}
       <DataQualityHeader data={data} />
 
@@ -128,6 +129,7 @@ export const DataQualityPage: React.FC = () => {
           <QualityMethodology />
         </>
       )}
-    </div>
+    </PageTransition>
   );
 };
+

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { clsx } from 'clsx';
 import { LayoutDashboard, Building2, Map, TrendingUp, ShieldCheck, X } from 'lucide-react';
 
@@ -11,6 +11,7 @@ export interface MobileNavProps {
 
 export const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
 
   const navLinks = [
     { label: 'Overview', path: '/overview', icon: LayoutDashboard },
@@ -38,7 +39,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onClose }) => {
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             className="relative w-4/5 max-w-xs bg-[var(--bg-surface)] h-full p-6 shadow-float flex flex-col justify-between z-10"
           >
             <div>
@@ -47,31 +48,38 @@ export const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onClose }) => {
                 <button
                   onClick={onClose}
                   className="p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-ring"
+                  aria-label="Close navigation"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <nav className="flex flex-col gap-2">
-                {navLinks.map((item) => {
+                {navLinks.map((item, idx) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path || (item.path === '/overview' && location.pathname === '/');
 
                   return (
-                    <NavLink
+                    <motion.div
                       key={item.path}
-                      to={item.path}
-                      onClick={onClose}
-                      className={clsx(
-                        'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-ring',
-                        isActive
-                          ? 'bg-[var(--teal-50)] text-[var(--teal-700)] font-semibold'
-                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]'
-                      )}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: shouldReduceMotion ? 0 : 0.05 * idx + 0.1, duration: 0.3 }}
                     >
-                      <Icon className="w-5 h-5" />
-                      <span>{item.label}</span>
-                    </NavLink>
+                      <NavLink
+                        to={item.path}
+                        onClick={onClose}
+                        className={clsx(
+                          'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors focus-ring',
+                          isActive
+                            ? 'bg-[var(--teal-50)] text-[var(--teal-700)] font-semibold'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]'
+                        )}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </motion.div>
                   );
                 })}
               </nav>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
+import { PageTransition } from '../components/motion/PageTransition';
 import { LoadingState } from '../components/feedback/LoadingState';
 import { api } from '../api/client';
 import type { Facility, Indicator, ForecastResponse, FacilityListResponse } from '../api/types';
@@ -59,50 +60,41 @@ export const ForecastPage: React.FC = () => {
       .catch(() => setFacilities([]));
 
     api.getIndicators()
-      .then((inds: any) => {
-        if (Array.isArray(inds)) setIndicators(inds);
-        else if (inds && Array.isArray(inds.items)) setIndicators(inds.items);
-        else setIndicators([]);
+      .then((res: any) => {
+        let inds: Indicator[] = [];
+        if (Array.isArray(res)) inds = res;
+        else if (res && Array.isArray(res.items)) inds = res.items;
+        setIndicators(inds);
       })
       .catch(() => setIndicators([]));
   }, []);
 
-  // Fetch forecast data when facility, indicator, or horizon changes
-  const fetchForecast = useCallback((facId: string, indCode: string, h: number) => {
-    if (!facId) {
-      setForecastData(null);
-      setIsLoading(false);
-      return;
-    }
+  // Primary API fetch function
+  const fetchForecast = useCallback(() => {
+    if (!selectedFacilityId || !selectedIndicatorCode) return;
 
     setIsLoading(true);
     setError(null);
 
-    api.getForecast(facId, indCode, h)
+    api.getForecast(selectedFacilityId, selectedIndicatorCode, horizon)
       .then((res) => {
         setForecastData(res);
         setIsLoading(false);
       })
       .catch((err) => {
-        setError(err.message || 'Unable to query CAREFlow backend forecasting engine.');
-        setForecastData(null);
+        setError(err instanceof Error ? err.message : 'Unable to generate forecast for the selected facility.');
         setIsLoading(false);
       });
-  }, []);
+  }, [selectedFacilityId, selectedIndicatorCode, horizon]);
 
+  // Fetch forecast whenever selected scope or horizon changes
   useEffect(() => {
-    if (selectedFacilityId) {
-      fetchForecast(selectedFacilityId, selectedIndicatorCode, horizon);
-    }
-  }, [selectedFacilityId, selectedIndicatorCode, horizon, fetchForecast]);
+    fetchForecast();
+  }, [fetchForecast]);
 
   const handleFacilityChange = (id: string) => {
     setSelectedFacilityId(id);
-    if (id) {
-      setSearchParams({ facility_id: id });
-    } else {
-      setSearchParams({});
-    }
+    setSearchParams({ facility_id: id });
   };
 
   const handleIndicatorChange = (code: string) => {
@@ -114,7 +106,7 @@ export const ForecastPage: React.FC = () => {
   };
 
   const selectedFacility = useMemo(
-    () => facilities.find((f) => f.id === selectedFacilityId || f.facility_code === selectedFacilityId) || null,
+    () => facilities.find((f) => f.id === selectedFacilityId) || null,
     [facilities, selectedFacilityId]
   );
 
@@ -130,8 +122,10 @@ export const ForecastPage: React.FC = () => {
     return forecastData.historical_points[forecastData.historical_points.length - 1].observation_month;
   }, [forecastData]);
 
+  const isEligible = forecastData?.eligibility?.is_eligible;
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <PageTransition className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* 1. Header */}
       <ScrollReveal>
         <ForecastHeader
@@ -144,70 +138,60 @@ export const ForecastPage: React.FC = () => {
         />
       </ScrollReveal>
 
-      {/* 2. Control Toolbar */}
+      {/* 2. Controls Toolbar */}
       <ScrollReveal delay={0.05}>
         <ForecastControls
           facilities={facilities}
           indicators={indicators}
           selectedFacilityId={selectedFacilityId}
-          onFacilityChange={handleFacilityChange}
           selectedIndicatorCode={selectedIndicatorCode}
-          onIndicatorChange={handleIndicatorChange}
           horizon={horizon}
+          onFacilityChange={handleFacilityChange}
+          onIndicatorChange={handleIndicatorChange}
           onHorizonChange={handleHorizonChange}
-          isLoading={isLoading}
         />
       </ScrollReveal>
 
-      {/* 3. Loading State */}
-      {isLoading && (
-        <ScrollReveal>
-          <LoadingState type="chart" />
-        </ScrollReveal>
-      )}
-
-      {/* 4. Network/API Error State */}
-      {!isLoading && error && (
-        <ScrollReveal>
-          <ForecastEmptyState
-            type="ERROR"
-            errorMessage={error}
-            onRetry={() => fetchForecast(selectedFacilityId, selectedIndicatorCode, horizon)}
-          />
-        </ScrollReveal>
-      )}
-
-      {/* 5. No Facility Selected State */}
-      {!isLoading && !error && !selectedFacilityId && (
-        <ScrollReveal>
-          <ForecastEmptyState
-            type="NO_SELECTION"
-            facilities={facilities}
-            onSelectFacility={handleFacilityChange}
-          />
-        </ScrollReveal>
-      )}
-
-      {/* 6. Forecast Content (Eligible or Ineligible) */}
-      {!isLoading && !error && forecastData && (
+      {/* 3. Main Content Body */}
+      {isLoading ? (
+        <LoadingState type="chart" />
+      ) : error ? (
+        <ForecastEmptyState
+          type="ERROR"
+          errorMessage={error}
+          onRetry={fetchForecast}
+        />
+      ) : !forecastData ? (
+        <ForecastEmptyState
+          type="NO_SELECTION"
+          facilities={facilities}
+          onSelectFacility={handleFacilityChange}
+        />
+      ) : (
         <>
-          {/* Eligibility Audit Card */}
+          {/* Eligibility Banner & Diagnostic Diagnostics */}
           <ScrollReveal delay={0.1}>
-            <ForecastReadiness
-              eligibility={forecastData.eligibility}
-              dataQuality={forecastData.data_quality}
-              totalHistoricalMonths={forecastData.historical_points?.length}
-            />
+            <ForecastReadiness eligibility={forecastData.eligibility} />
           </ScrollReveal>
 
-          {/* Success Mode: Full Forecasting Dashboard */}
-          {forecastData.status === 'SUCCESS' && (
+          {/* Eligible Forecast View */}
+          {forecastData.status === 'SUCCESS' && isEligible && (
             <>
-              <ScrollReveal delay={0.15}>
+              {/* Hero Metric & Model Badge */}
+              <ScrollReveal delay={0.12}>
                 <ForecastHero data={forecastData} />
               </ScrollReveal>
 
-              <ScrollReveal delay={0.2}>
+              {/* Forecast Horizon Selector */}
+              <ScrollReveal delay={0.14}>
+                <ForecastHorizonSelector
+                  currentHorizon={horizon}
+                  onHorizonSelect={handleHorizonChange}
+                />
+              </ScrollReveal>
+
+              {/* Forecast Line Chart with 95% Confidence Band */}
+              <ScrollReveal delay={0.16}>
                 <ForecastChart
                   historicalPoints={forecastData.historical_points}
                   forecastPoints={forecastData.forecast_points}
@@ -217,31 +201,28 @@ export const ForecastPage: React.FC = () => {
                 />
               </ScrollReveal>
 
-              <ScrollReveal delay={0.25}>
-                <ForecastHorizonSelector
-                  currentHorizon={horizon}
-                  onHorizonSelect={handleHorizonChange}
-                  isLoading={isLoading}
-                />
-              </ScrollReveal>
-
-              <ScrollReveal delay={0.3}>
-                <ForecastSignals data={forecastData} />
-              </ScrollReveal>
-
-              <ScrollReveal delay={0.35}>
+              {/* Model Selection & Performance Evaluation */}
+              <ScrollReveal delay={0.18}>
                 <ModelSelectionPanel data={forecastData} />
               </ScrollReveal>
 
-              <ScrollReveal delay={0.4}>
+              {/* Baseline Comparison (Naive vs Candidate Models) */}
+              <ScrollReveal delay={0.2}>
                 <BaselineComparison data={forecastData} />
               </ScrollReveal>
 
-              <ScrollReveal delay={0.45}>
+              {/* Prediction Interval & Uncertainty Analysis */}
+              <ScrollReveal delay={0.22}>
                 <ForecastUncertainty data={forecastData} />
               </ScrollReveal>
 
-              <ScrollReveal delay={0.5}>
+              {/* Action Signals & Operational Alerts */}
+              <ScrollReveal delay={0.24}>
+                <ForecastSignals data={forecastData} />
+              </ScrollReveal>
+
+              {/* Methodology & Model Governance Accordion */}
+              <ScrollReveal delay={0.26}>
                 <ForecastMethodology />
               </ScrollReveal>
             </>
@@ -274,6 +255,6 @@ export const ForecastPage: React.FC = () => {
           )}
         </>
       )}
-    </div>
+    </PageTransition>
   );
 };

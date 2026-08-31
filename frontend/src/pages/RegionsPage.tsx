@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
+import { PageTransition } from '../components/motion/PageTransition';
 import { LoadingState } from '../components/feedback/LoadingState';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { EmptyState } from '../components/feedback/EmptyState';
@@ -102,7 +103,7 @@ export const RegionsPage: React.FC = () => {
   const regionsList = regionalData?.regions ?? [];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+    <PageTransition className="space-y-8 max-w-7xl mx-auto pb-12">
       {/* Editorial Header */}
       <ScrollReveal>
         <RegionalHeader
@@ -180,6 +181,6 @@ export const RegionsPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageTransition>
   );
 };

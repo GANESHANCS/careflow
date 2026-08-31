@@ -1,4 +1,5 @@
 import React, { useState, useId } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { HistoricalPoint, ForecastPoint } from '../../api/types';
 
 interface ForecastChartProps {
@@ -18,6 +19,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
 }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const chartId = useId();
+  const shouldReduceMotion = useReducedMotion();
 
   const safeHistorical = Array.isArray(historicalPoints) ? historicalPoints : [];
   const safeForecast = Array.isArray(forecastPoints) ? forecastPoints : [];
@@ -277,31 +279,39 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
 
           {/* 95% Prediction Interval Shaded Band */}
           {intervalPathPoints.length > 0 && isEligible && (
-            <path
+            <motion.path
               d={intervalPathPoints.join(' ')}
               fill="var(--purple-500)"
               fillOpacity="0.15"
               stroke="var(--purple-400)"
               strokeWidth="1"
               strokeDasharray="3,3"
+              initial={shouldReduceMotion ? { opacity: 0.15 } : { opacity: 0 }}
+              whileInView={{ opacity: 0.15 }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+              viewport={{ once: true }}
             />
           )}
 
           {/* Historical Solid Line */}
           {historicalPathPoints.length > 0 && (
-            <path
+            <motion.path
               d={historicalPathPoints.join(' ')}
               fill="none"
               stroke="var(--teal-600)"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
+              initial={shouldReduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
+              whileInView={{ pathLength: 1 }}
+              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              viewport={{ once: true }}
             />
           )}
 
           {/* Forecast Dashed Line */}
           {forecastPathPoints.length > 0 && isEligible && (
-            <path
+            <motion.path
               d={forecastPathPoints.join(' ')}
               fill="none"
               stroke="var(--purple-600)"
@@ -309,6 +319,10 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
               strokeDasharray="6,6"
               strokeLinecap="round"
               strokeLinejoin="round"
+              initial={shouldReduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
+              whileInView={{ pathLength: 1 }}
+              transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              viewport={{ once: true }}
             />
           )}
 
@@ -377,9 +391,8 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             />
           )}
 
-          {/* Month Labels (Show subset to avoid overlap) */}
+          {/* Month Labels */}
           {timeline.map((pt, idx) => {
-            // Show every Nth label depending on timeline length
             const step = Math.ceil(timeline.length / 12);
             if (idx % step !== 0 && idx !== timeline.length - 1) return null;
 

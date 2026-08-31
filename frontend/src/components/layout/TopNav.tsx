@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Activity, Search, Menu, X, User, Server } from 'lucide-react';
 import { api } from '../../api/client';
 import type { SystemHealth } from '../../api/types';
@@ -12,6 +13,7 @@ export interface TopNavProps {
 
 export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
   const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [isHealthLoading, setIsHealthLoading] = useState(true);
 
@@ -47,9 +49,13 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
         {/* Brand Logo & Tag */}
         <div className="flex items-center gap-6">
           <NavLink to="/overview" className="flex items-center gap-2.5 group focus-ring rounded-lg p-1">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--teal-600)] to-[var(--teal-700)] text-white flex items-center justify-center shadow-xs transition-transform duration-200 group-hover:scale-105">
+            <motion.div
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.06, rotate: 3 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+              className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--teal-600)] to-[var(--teal-700)] text-white flex items-center justify-center shadow-xs"
+            >
               <Activity className="w-5 h-5" />
-            </div>
+            </motion.div>
             <div className="flex flex-col">
               <span className="font-display font-extrabold text-lg tracking-tight text-[var(--text-primary)] leading-none group-hover:text-[var(--teal-600)] transition-colors">
                 CAREFlow
@@ -77,7 +83,11 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
                 >
                   {link.label}
                   {isActive && (
-                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--teal-600)] rounded-full" />
+                    <motion.span
+                      layoutId={shouldReduceMotion ? undefined : 'topNavActiveIndicator'}
+                      className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--teal-600)] rounded-full"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
                   )}
                 </NavLink>
               );
@@ -107,18 +117,24 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
           </div>
 
           {/* User / Profile Avatar Button */}
-          <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] rounded-full transition-colors cursor-pointer focus-ring" title="User Profile">
+          <motion.button
+            whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] rounded-full transition-colors cursor-pointer focus-ring"
+            title="User Profile"
+          >
             <User className="w-4 h-4" />
-          </button>
+          </motion.button>
 
           {/* Mobile Menu Toggle Button */}
-          <button
+          <motion.button
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
             onClick={onMobileMenuToggle}
             className="md:hidden p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] rounded-lg transition-colors cursor-pointer focus-ring"
             aria-label="Toggle mobile menu"
           >
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          </motion.button>
         </div>
       </div>
     </header>
