@@ -1,96 +1,185 @@
-import React, { useEffect, useState } from 'react';
-import { InteractiveHeading } from '../components/typography/InteractiveHeading';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ScrollReveal } from '../components/motion/ScrollReveal';
-import { Button } from '../components/buttons/Button';
-import { EmptyState } from '../components/feedback/EmptyState';
 import { LoadingState } from '../components/feedback/LoadingState';
 import { ErrorState } from '../components/feedback/ErrorState';
+import { EmptyState } from '../components/feedback/EmptyState';
 import { api } from '../api/client';
-import type { RegionalAnalyticsResponse } from '../api/types';
-import { RefreshCw } from 'lucide-react';
+import type {
+  RegionalAnalyticsResponse,
+  AnalyticsTrendsResponse,
+  Indicator,
+  FacilityListResponse,
+  Facility,
+} from '../api/types';
+
+import { RegionalHeader } from '../components/regions/RegionalHeader';
+import { RegionalFilters } from '../components/regions/RegionalFilters';
+import { RegionalOverview } from '../components/regions/RegionalOverview';
+import { RegionalRanking } from '../components/regions/RegionalRanking';
+import { RegionalTrend } from '../components/regions/RegionalTrend';
+import { RegionalReliability } from '../components/regions/RegionalReliability';
+import { RegionalAttention } from '../components/regions/RegionalAttention';
 
 export const RegionsPage: React.FC = () => {
-  const [data, setData] = useState<RegionalAnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [level, setLevel] = useState<'district' | 'state'>('district');
+  const [level, setLevel] = useState<'state' | 'district'>('state');
+  const [selectedIndicator, setSelectedIndicator] = useState<string>('');
+  const [selectedState, setSelectedState] = useState<string>('');
+  const [selectedRegionName, setSelectedRegionName] = useState<string | null>(null);
 
-  const fetchRegionalData = () => {
+  const [regionalData, setRegionalData] = useState<RegionalAnalyticsResponse | null>(null);
+  const [trendData, setTrendData] = useState<AnalyticsTrendsResponse | null>(null);
+  const [indicators, setIndicators] = useState<Indicator[]>([]);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch static lookups once
+  useEffect(() => {
+    api.getIndicators()
+      .then((inds: any) => {
+        if (Array.isArray(inds)) setIndicators(inds);
+        else if (inds && Array.isArray(inds.items)) setIndicators(inds.items);
+        else setIndicators([]);
+      })
+      .catch(() => setIndicators([]));
+
+    api.getFacilities({ limit: 100 })
+      .then((res: FacilityListResponse | Facility[]) => {
+        if (Array.isArray(res)) setFacilities(res);
+        else if (res && Array.isArray(res.items)) setFacilities(res.items);
+      })
+      .catch(() => setFacilities([]));
+  }, []);
+
+  // Derive available states dynamically from data
+  const statesList = useMemo(() => {
+    const list = Array.from(new Set(facilities.map((f) => f.state).filter(Boolean))).sort();
+    if (list.length > 0) return list;
+    return ['Karnataka', 'Maharashtra', 'Tamil Nadu', 'Kerala'];
+  }, [facilities]);
+
+  const fetchRegionalAnalytics = useCallback(() => {
     setLoading(true);
     setError(null);
-    api.getRegionalAnalytics({ level })
-      .then((res) => {
-        setData(res);
+
+    const regionalParams = {
+      level,
+      indicator_code: selectedIndicator || undefined,
+      state: selectedState || undefined,
+    };
+
+    const trendParams = {
+      indicator_code: selectedIndicator || 'opd_attendance',
+      state: selectedState || undefined,
+    };
+
+    Promise.all([
+      api.getRegionalAnalytics(regionalParams),
+      api.getAnalyticsTrends(trendParams).catch(() => null),
+    ])
+      .then(([regRes, trendRes]) => {
+        setRegionalData(regRes);
+        setTrendData(trendRes);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || 'Unable to retrieve regional analytics.');
+        setError(err instanceof Error ? err.message : 'Unable to retrieve regional intelligence data.');
         setLoading(false);
       });
-  };
+  }, [level, selectedIndicator, selectedState]);
 
   useEffect(() => {
-    fetchRegionalData();
-  }, [level]);
+    fetchRegionalAnalytics();
+  }, [fetchRegionalAnalytics]);
+
+  const handleReset = () => {
+    setSelectedIndicator('');
+    setSelectedState('');
+    setSelectedRegionName(null);
+  };
+
+  const regionsList = regionalData?.regions ?? [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+      {/* Editorial Header */}
       <ScrollReveal>
-        <InteractiveHeading
-          title="Regional Utilization Intelligence"
-          subtitle="Compare healthcare demand aggregations across States and Districts"
-          badge="Regions"
-          badgeColor="teal"
+        <RegionalHeader
+          reportingMonth={regionalData?.reporting_month}
+          level={level}
+          totalRegions={regionsList.length}
         />
       </ScrollReveal>
 
-      {/* Controls */}
-      <ScrollReveal delay={0.1}>
-        <div className="flex items-center justify-between gap-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--text-secondary)]">Aggregation Level:</span>
-            <div className="inline-flex rounded-lg border border-[var(--border-subtle)] p-0.5 bg-[var(--bg-surface-subtle)]">
-              <button
-                onClick={() => setLevel('district')}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer focus-ring ${level === 'district' ? 'bg-white text-[var(--teal-700)] shadow-xs font-semibold' : 'text-[var(--text-muted)]'}`}
-              >
-                District Level
-              </button>
-              <button
-                onClick={() => setLevel('state')}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer focus-ring ${level === 'state' ? 'bg-white text-[var(--teal-700)] shadow-xs font-semibold' : 'text-[var(--text-muted)]'}`}
-              >
-                State Level
-              </button>
+      {/* Filter Navigation Bar */}
+      <ScrollReveal delay={0.05}>
+        <RegionalFilters
+          level={level}
+          onLevelChange={setLevel}
+          selectedIndicator={selectedIndicator}
+          onIndicatorChange={setSelectedIndicator}
+          selectedState={selectedState}
+          onStateChange={setSelectedState}
+          indicators={indicators}
+          statesList={statesList}
+          onReset={handleReset}
+        />
+      </ScrollReveal>
+
+      {/* Content Section */}
+      {loading ? (
+        <LoadingState type="table" />
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchRegionalAnalytics} />
+      ) : !regionalData || regionsList.length === 0 ? (
+        <EmptyState
+          title="NO VERIFIED REGIONAL OBSERVATIONS"
+          description="Regional intelligence will activate when verified HMIS reporting data is available for the selected jurisdiction level and indicator filters."
+          actionText="Reset Filters"
+          onAction={handleReset}
+          icon="database"
+        />
+      ) : (
+        <div className="space-y-8">
+          {/* Section 1: Hero Regional Utilization Signal */}
+          <ScrollReveal delay={0.1}>
+            <RegionalOverview data={regionalData} loading={loading} />
+          </ScrollReveal>
+
+          {/* Section 2: Spatial Ranked Comparison */}
+          <ScrollReveal delay={0.15}>
+            <RegionalRanking
+              regions={regionsList}
+              level={level}
+              onSelectRegion={(name) => setSelectedRegionName(name)}
+            />
+          </ScrollReveal>
+
+          {/* Section 3: Monthly Time-Series Trend */}
+          <ScrollReveal delay={0.2}>
+            <RegionalTrend
+              trends={trendData}
+              loading={loading}
+              regionName={selectedRegionName || selectedState || 'All Regions'}
+            />
+          </ScrollReveal>
+
+          {/* Section 4 & 5: Governance & Diagnostic Signals */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-6">
+              <ScrollReveal delay={0.25}>
+                <RegionalReliability regions={regionsList} loading={loading} level={level} />
+              </ScrollReveal>
+            </div>
+            <div className="lg:col-span-6">
+              <ScrollReveal delay={0.3}>
+                <RegionalAttention regions={regionsList} loading={loading} />
+              </ScrollReveal>
             </div>
           </div>
-
-          <Button variant="ghost" size="sm" onClick={fetchRegionalData} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
-            Refresh
-          </Button>
         </div>
-      </ScrollReveal>
-
-      {/* Content */}
-      <ScrollReveal delay={0.2}>
-        {loading ? (
-          <LoadingState type="table" />
-        ) : error ? (
-          <ErrorState message={error} onRetry={fetchRegionalData} />
-        ) : data && data.regions.length > 0 ? (
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-6">
-            <h3 className="font-display font-bold text-base mb-4">Regional Summary Table</h3>
-            {/* Table visualization ready */}
-          </div>
-        ) : (
-          <EmptyState
-            title="NO REGIONAL OBSERVATIONS LOADED"
-            description="Regional analytics aggregate state and district level healthcare utilization once raw HMIS observation datasets are ingested into the database."
-            actionText="Retry Query"
-            onAction={fetchRegionalData}
-          />
-        )}
-      </ScrollReveal>
+      )}
     </div>
   );
 };
