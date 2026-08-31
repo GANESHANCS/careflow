@@ -1,17 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { InteractiveHeading } from '../components/typography/InteractiveHeading';
-import { ScrollReveal } from '../components/motion/ScrollReveal';
-import { LoadingState } from '../components/feedback/LoadingState';
-import { ErrorState } from '../components/feedback/ErrorState';
-import { EmptyState } from '../components/feedback/EmptyState';
 import { api } from '../api/client';
 import type { DataQualityAnalyticsResponse } from '../api/types';
-import { ShieldCheck, AlertTriangle, CheckCircle, Database } from 'lucide-react';
+
+import { DataQualityHeader } from '../components/data-quality/DataQualityHeader';
+import { QualityScoreHero } from '../components/data-quality/QualityScoreHero';
+import { QualityBreakdown } from '../components/data-quality/QualityBreakdown';
+import { IssueDistribution } from '../components/data-quality/IssueDistribution';
+import { ReportingCompleteness } from '../components/data-quality/ReportingCompleteness';
+import { QualityIssueTable } from '../components/data-quality/QualityIssueTable';
+import { IncompleteFacilities } from '../components/data-quality/IncompleteFacilities';
+import { QualityTimeline } from '../components/data-quality/QualityTimeline';
+import { QualityAttention } from '../components/data-quality/QualityAttention';
+import { QualityMethodology } from '../components/data-quality/QualityMethodology';
+
+import { LoadingState } from '../components/feedback/LoadingState';
+import { ErrorState } from '../components/feedback/ErrorState';
+import { RefreshCw, Database } from 'lucide-react';
 
 export const DataQualityPage: React.FC = () => {
   const [data, setData] = useState<DataQualityAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
 
   const fetchQualityData = () => {
     setLoading(true);
@@ -22,7 +32,7 @@ export const DataQualityPage: React.FC = () => {
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || 'Unable to retrieve data quality audit log.');
+        setError(err.message || 'Unable to retrieve data quality audit logs.');
         setLoading(false);
       });
   };
@@ -31,94 +41,93 @@ export const DataQualityPage: React.FC = () => {
     fetchQualityData();
   }, []);
 
-  return (
-    <div className="space-y-8">
-      <ScrollReveal>
-        <InteractiveHeading
-          title="Data Quality & Integrity Governance"
-          subtitle="Audit missingness, observed zero values, invalid counts, and reporting completeness across the database"
-          badge="Quality Audit"
-          badgeColor="amber"
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
+        <div className="h-24 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-3xl animate-pulse" />
+        <div className="h-64 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-3xl animate-pulse" />
+        <LoadingState type="card" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <ErrorState
+          title="Data Quality Service Unavailable"
+          message={error}
+          onRetry={fetchQualityData}
         />
-      </ScrollReveal>
+      </div>
+    );
+  }
 
-      {/* Audit Stats Header */}
-      <ScrollReveal delay={0.1}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-              <span>Overall Quality Score</span>
-              <ShieldCheck className="w-4 h-4 text-[var(--green-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : `${data?.overall_quality_score ?? 100}%`}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Validation Pass Rate
-            </div>
-          </div>
+  // Handle case when database has no records loaded
+  const hasNoData = !data || (
+    (data.observation_breakdown?.total_observations ?? 0) === 0 &&
+    (data.completeness_summary?.expected_observations ?? 0) === 0 &&
+    data.total_issues === 0
+  );
 
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-              <span>Valid Observations</span>
-              <CheckCircle className="w-4 h-4 text-[var(--teal-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : data?.valid_count ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Verified Numeric Records
-            </div>
-          </div>
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
+      {/* 1. Editorial Header */}
+      <DataQualityHeader data={data} />
 
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-              <span>Observed Zeroes</span>
-              <Database className="w-4 h-4 text-[var(--blue-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : data?.zero_count ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Preserved Operational Zeroes
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-              <span>Missing Values</span>
-              <AlertTriangle className="w-4 h-4 text-[var(--coral-600)]" />
-            </div>
-            <div className="text-3xl font-extrabold font-display text-[var(--text-primary)]">
-              {loading ? '...' : data?.missing_count ?? 0}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              Preserved Missing Months
-            </div>
-          </div>
+      {hasNoData ? (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-3xl p-12 text-center my-8">
+          <Database className="w-12 h-12 text-[var(--teal-600)] mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-[var(--text-primary)]">HMIS DATA AWAITING INGESTION</h2>
+          <p className="text-sm text-[var(--text-muted)] mt-2 max-w-lg mx-auto">
+            Data-quality analytics and 13-point pipeline audit scores will appear once verified HMIS returns are ingested.
+          </p>
+          <button
+            onClick={fetchQualityData}
+            className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--teal-600)] hover:bg-[var(--teal-700)] text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Check Pipeline Database</span>
+          </button>
         </div>
-      </ScrollReveal>
+      ) : (
+        <>
+          {/* 2. Quality Score Hero */}
+          <QualityScoreHero data={data} />
 
-      {/* Detailed Quality Log or Empty State */}
-      <ScrollReveal delay={0.2}>
-        {loading ? (
-          <LoadingState type="table" />
-        ) : error ? (
-          <ErrorState message={error} onRetry={fetchQualityData} />
-        ) : data && (data.total_observations ?? 0) > 0 ? (
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-6">
-            <h3 className="font-display font-bold text-base mb-4">Data Quality Breakdown</h3>
-            {/* Table visualization ready */}
-          </div>
-        ) : (
-          <EmptyState
-            title="NO DATA QUALITY ISSUES LOGGED"
-            description="The database currently contains no raw observation anomalies. Quality checks execute automatically during Phase 2 ingestion."
-            actionText="Refresh Quality Log"
-            onAction={fetchQualityData}
+          {/* 3. Observation Classification Breakdown */}
+          <QualityBreakdown data={data} />
+
+          {/* 4. Issue Severity & Category Distribution */}
+          <IssueDistribution
+            data={data}
+            selectedSeverity={selectedSeverity}
+            onSelectSeverity={setSelectedSeverity}
           />
-        )}
-      </ScrollReveal>
+
+          {/* 5. Reporting Completeness Yield */}
+          <ReportingCompleteness data={data} />
+
+          {/* 6. Operational Governance Attention Required */}
+          <QualityAttention data={data} />
+
+          {/* 7. Facilities with Incomplete Monthly Reporting */}
+          <IncompleteFacilities facilities={data?.incomplete_facilities || []} />
+
+          {/* 8. Monthly Reporting Continuity Timeline */}
+          <QualityTimeline timeline={data?.monthly_timeline || []} />
+
+          {/* 9. 13-Point Pipeline Audit Issue Registry */}
+          <QualityIssueTable
+            issues={data?.issues || []}
+            selectedSeverity={selectedSeverity}
+            onSelectSeverity={setSelectedSeverity}
+          />
+
+          {/* 10. 13-Point Quality Audit Methodology Accordion */}
+          <QualityMethodology />
+        </>
+      )}
     </div>
   );
 };

@@ -133,6 +133,32 @@ class IncompleteFacilityItem(BaseModel):
     completeness_pct: float
 
 
+class ObservationBreakdownSchema(BaseModel):
+    valid_count: int = 0
+    zero_count: int = 0
+    missing_count: int = 0
+    invalid_count: int = 0
+    imputed_count: int = 0
+    total_observations: int = 0
+
+
+class CompletenessSummarySchema(BaseModel):
+    expected_observations: int = 0
+    actual_reported_observations: int = 0
+    completeness_pct: float = 0.0
+    total_facilities: int = 0
+    reporting_facilities: int = 0
+
+
+class MonthlyQualityPointSchema(BaseModel):
+    reporting_month: str
+    completeness_pct: float
+    reporting_facilities: int
+    total_facilities: int
+    issue_count: int
+    status: str = "HEALTHY"
+
+
 class DataQualityAnalyticsResponse(BaseModel):
     overall_quality_score: float
     total_issues: int
@@ -141,3 +167,7 @@ class DataQualityAnalyticsResponse(BaseModel):
     incomplete_facilities_count: int
     incomplete_facilities: List[IncompleteFacilityItem]
     issues: List[DataQualityIssueItem]
+    latest_period: Optional[str] = None
+    observation_breakdown: Optional[ObservationBreakdownSchema] = None
+    completeness_summary: Optional[CompletenessSummarySchema] = None
+    monthly_timeline: List[MonthlyQualityPointSchema] = []

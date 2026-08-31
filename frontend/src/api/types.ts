@@ -156,6 +156,32 @@ export interface IncompleteFacilityItem {
   completeness_pct: number;
 }
 
+export interface ObservationBreakdown {
+  valid_count: number;
+  zero_count: number;
+  missing_count: number;
+  invalid_count: number;
+  imputed_count: number;
+  total_observations: number;
+}
+
+export interface CompletenessSummary {
+  expected_observations: number;
+  actual_reported_observations: number;
+  completeness_pct: number;
+  total_facilities: number;
+  reporting_facilities: number;
+}
+
+export interface MonthlyQualityPoint {
+  reporting_month: string;
+  completeness_pct: number;
+  reporting_facilities: number;
+  total_facilities: number;
+  issue_count: number;
+  status: string;
+}
+
 export interface DataQualityAnalyticsResponse {
   overall_quality_score: number;
   total_issues: number;
@@ -164,12 +190,10 @@ export interface DataQualityAnalyticsResponse {
   incomplete_facilities_count: number;
   incomplete_facilities: IncompleteFacilityItem[];
   issues: DataQualityIssueItem[];
-  total_observations?: number;
-  valid_count?: number;
-  missing_count?: number;
-  zero_count?: number;
-  invalid_count?: number;
-  imputed_count?: number;
+  latest_period?: string | null;
+  observation_breakdown?: ObservationBreakdown;
+  completeness_summary?: CompletenessSummary;
+  monthly_timeline?: MonthlyQualityPoint[];
 }
 
 export interface HistoricalPoint {
