@@ -56,3 +56,21 @@ python scripts/seed_forecasting_data.py
 ### `GET /api/model/metrics`
 - **Parameters**: `target_indicator` (optional str).
 - **Response**: Summary list of registered model metadata, training periods, MAE, RMSE, sMAPE, and improvement percentages over baselines.
+
+---
+
+## 6. Phase 6F Forecast Intelligence Workspace UI
+
+The `/forecast` route provides a full interactive predictive workspace:
+- **`ForecastHeader`**: Contextual editorial header with facility, indicator, horizon, and synthetic data badges.
+- **`ForecastControls`**: Parameter selector with live facility search, state filter, indicator selector, and horizon toggle.
+- **`ForecastReadiness`**: Series eligibility audit card rendering `FORECAST ELIGIBLE` or diagnostic reasons (`INSUFFICIENT_HISTORY`, `EXCESSIVE_MISSINGNESS`, etc.).
+- **`ForecastHero`**: Centerpiece hero banner displaying winning model type, validation MAE, baseline improvement %, total projected demand, and confidence band status.
+- **`ForecastChart`**: Custom SVG line chart displaying actual historical observations (teal line), predicted demand trajectory (purple dashed line), ~95% prediction interval shaded band, month labels, crosshair hover tooltips, and accessible data table alternative.
+- **`ForecastHorizonSelector`**: Quick horizon duration toggle bar (3M, 6M, 12M).
+- **`ForecastSignals`**: Operational diagnostic stream translating model predictions into capacity guidance.
+- **`ModelSelectionPanel`**: Governance card explaining baseline primacy rules and winning model rationale.
+- **`BaselineComparison`**: Candidate model tournament benchmark table comparing 4 baselines and 4 ML candidates.
+- **`ForecastUncertainty`**: Quantifies ~95% prediction intervals and residual error.
+- **`ForecastMethodology`**: Expandable 7-step technical methodology panel.
+

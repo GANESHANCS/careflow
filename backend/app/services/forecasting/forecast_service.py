@@ -126,6 +126,19 @@ class ForecastingService:
                 "disclaimer": SYNTHETIC_DATA_DISCLAIMER
             }
 
+        # Step 1: Construct historical points list
+        historical_points = [
+            {
+                "observation_month": p.observation_month,
+                "observation_date": p.observation_date,
+                "observed_value": p.observed_value,
+                "is_missing": p.is_missing,
+                "is_imputed": p.is_imputed,
+                "status": p.status,
+            }
+            for p in series.points
+        ]
+
         # Step 1: Check eligibility
         evaluator = EligibilityEvaluator()
         eligibility = evaluator.evaluate(series, forecast_horizon=horizon)
@@ -136,6 +149,7 @@ class ForecastingService:
                 "facility": {"id": facility.id, "name": facility.facility_name, "district": facility.district},
                 "indicator": {"code": indicator.code, "name": indicator.name},
                 "forecast_horizon": horizon,
+                "historical_points": historical_points,
                 "eligibility": eligibility.model_dump(),
                 "data_quality": {
                     "reporting_completeness_pct": round(series.reporting_completeness * 100.0, 1),
@@ -263,6 +277,7 @@ class ForecastingService:
                 "end_month": training_end,
                 "total_observations": series.total_observations
             },
+            "historical_points": historical_points,
             "forecast_points": forecast_points,
             "prediction_intervals": {
                 "interval_type": interval_res.interval_type,
@@ -273,6 +288,7 @@ class ForecastingService:
                 "strongest_baseline_name": selection_summary.strongest_baseline_name,
                 "strongest_baseline_mae": selection_summary.strongest_baseline_mae
             },
+            "candidate_evaluations": selection_summary.all_evaluations,
             "improvement_over_baseline_pct": selection_summary.improvement_over_baseline_pct,
             "eligibility": eligibility.model_dump(),
             "explainability": explainability,

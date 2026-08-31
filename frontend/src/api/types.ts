@@ -172,6 +172,24 @@ export interface DataQualityAnalyticsResponse {
   imputed_count?: number;
 }
 
+export interface HistoricalPoint {
+  observation_month: string;
+  observation_date: string;
+  observed_value: number | null;
+  is_missing: boolean;
+  is_imputed: boolean;
+  status: string | null;
+}
+
+export interface CandidateEvaluation {
+  model_name: string;
+  is_baseline: boolean;
+  mae: number;
+  rmse: number;
+  smape: number;
+  wape: number;
+}
+
 export interface ForecastPoint {
   forecast_month: string;
   forecast_date: string;
@@ -205,6 +223,7 @@ export interface ForecastResponse {
     end_month: string;
     total_observations: number;
   };
+  historical_points?: HistoricalPoint[];
   forecast_points: ForecastPoint[];
   prediction_intervals?: {
     interval_type: string;
@@ -221,12 +240,19 @@ export interface ForecastResponse {
     strongest_baseline_name: string;
     strongest_baseline_mae: number;
   };
+  candidate_evaluations?: CandidateEvaluation[];
   improvement_over_baseline_pct?: number;
   eligibility: {
     is_eligible: boolean;
     status: string;
     reason_code: string | null;
     reason_message: string;
+  };
+  data_quality?: {
+    reporting_completeness_pct?: number;
+    quality_score?: number;
+    total_observations?: number;
+    missing_count?: number;
   };
   explainability?: {
     model_title: string;
