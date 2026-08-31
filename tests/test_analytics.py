@@ -2,7 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from backend.app.main import app
 from backend.app.db.models.facility import Facility
 from backend.app.db.models.indicator import Indicator
 from backend.app.db.models.observation import Observation
@@ -14,8 +13,6 @@ from backend.app.services.analytics.regional import RegionalAnalyticsService
 from backend.app.services.analytics.facility import FacilityAnalyticsService
 from backend.app.services.analytics.comparison import FacilityComparisonService
 from backend.app.services.analytics.data_quality import DataQualityAnalyticsService
-
-client = TestClient(app)
 
 
 def test_change_calculations():
@@ -149,7 +146,7 @@ def test_data_quality_analytics_service(db_session: Session):
     assert res["severity_counts"]["WARNING"] == 1
 
 
-def test_analytics_api_endpoints(db_session: Session):
+def test_analytics_api_endpoints(client: TestClient, db_session: Session, auth_headers: dict):
     f = Facility(id="F_API_1", facility_code="A1", facility_name="API Hospital", facility_type="DH", state="StateA", district="DistA", raw_facility_name="API Hospital")
     ind = Indicator(id="IND_imm", code="immunisation", name="Immunisation", category="Child", unit="children")
     db_session.add_all([f, ind])
@@ -159,33 +156,37 @@ def test_analytics_api_endpoints(db_session: Session):
     db_session.add(o)
     db_session.commit()
 
-    # GET /api/analytics/summary
-    res_sum = client.get("/api/analytics/summary")
+    # Unauthenticated GET /api/analytics/summary -> 401
+    res_unauth = client.get("/api/analytics/summary")
+    assert res_unauth.status_code == 401
+
+    # GET /api/analytics/summary with auth
+    res_sum = client.get("/api/analytics/summary", headers=auth_headers)
     assert res_sum.status_code == 200
     assert res_sum.json()["total_facilities"] >= 1
 
     # GET /api/analytics/trends
-    res_tr = client.get("/api/analytics/trends?indicator_code=immunisation")
+    res_tr = client.get("/api/analytics/trends?indicator_code=immunisation", headers=auth_headers)
     assert res_tr.status_code == 200
     assert len(res_tr.json()["series"]) >= 1
 
     # GET /api/analytics/regional
-    res_reg = client.get("/api/analytics/regional?level=district")
+    res_reg = client.get("/api/analytics/regional?level=district", headers=auth_headers)
     assert res_reg.status_code == 200
 
     # GET /api/analytics/facilities
-    res_fac = client.get("/api/analytics/facilities?facility_id=F_API_1")
+    res_fac = client.get("/api/analytics/facilities?facility_id=F_API_1", headers=auth_headers)
     assert res_fac.status_code == 200
     assert res_fac.json()["facility_name"] == "API Hospital"
 
     # GET /api/analytics/compare
-    res_cmp = client.get("/api/analytics/compare?facility_ids=F_API_1&indicator_code=immunisation")
+    res_cmp = client.get("/api/analytics/compare?facility_ids=F_API_1&indicator_code=immunisation", headers=auth_headers)
     assert res_cmp.status_code == 200
 
     # GET /api/analytics/data-quality
-    res_dq = client.get("/api/analytics/data-quality")
+    res_dq = client.get("/api/analytics/data-quality", headers=auth_headers)
     assert res_dq.status_code == 200
 
     # Test invalid level error validation
-    res_err = client.get("/api/analytics/regional?level=invalid_level")
+    res_err = client.get("/api/analytics/regional?level=invalid_level", headers=auth_headers)
     assert res_err.status_code == 400

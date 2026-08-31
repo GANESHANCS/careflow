@@ -1,234 +1,69 @@
-# CAREFlow API Documentation
+# CAREFlow API Architecture & Endpoint Specification
 
 ## Overview
-
-The CAREFlow Backend API is built using **FastAPI** and follows standard RESTful principles. All API endpoints are prefixed with `/api`.
-
-- **Interactive API Documentation (Swagger)**: `http://127.0.0.1:8000/api/docs`
-- **ReDoc Specifications**: `http://127.0.0.1:8000/api/redoc`
+This document specifies the CAREFlow REST API layer, authentication requirements, middleware correlation, error contracts, and versioning rules implemented in Phase 7D.
 
 ---
 
-## Endpoint Specifications
+## 1. API Versioning & Routing Strategy
+* **Canonical API Base Path**: `/api/v1`
+* **Backwards-Compatible Alias**: `/api`
+* Both `/api/*` and `/api/v1/*` routes are mounted simultaneously in `backend/app/main.py` to ensure legacy and current frontend clients operate without breaking.
 
-### 1. Health & Database Verification
-#### `GET /api/health`
-Returns system status, software version, environment details, and real database connectivity test (`SELECT 1`).
+---
 
-**Response Example (200 OK)**:
+## 2. API Endpoints Protection Matrix
+
+| Endpoint Route | Method | Access Level | Description |
+| :--- | :--- | :--- | :--- |
+| `/api/health` | `GET` | **Public** | System & database health probe. Safe for external load balancers. |
+| `/api/auth/login` | `POST` | **Public (Rate-Limited)** | Authenticates credentials and returns signed JWT access token. |
+| `/api/auth/me` | `GET` | **Protected (Any Role)** | Returns authenticated user profile metadata. |
+| `/api/auth/logout` | `POST` | **Protected (Any Role)** | Stateless client logout signal. |
+| `/api/facilities/*` | `GET` | **Protected (Any Role)** | Healthcare facility directory and observation queries. |
+| `/api/indicators/*` | `GET` | **Protected (Any Role)** | Indicator dictionary metadata. |
+| `/api/analytics/*` | `GET` | **Protected (Any Role)** | Executive summary, time-series trends, regional, and facility comparison analytics. |
+| `/api/forecast` | `GET` | **Protected (Any Role)** | Monthly demand forecasting engine and prediction intervals. |
+| `/api/model/metrics` | `GET` | **Protected (Any Role)** | Forecasting model registry benchmarks and MAE/RMSE evaluation metrics. |
+
+---
+
+## 3. Middleware & Request Tracing (`X-Request-ID`)
+Every HTTP request processed by CAREFlow is assigned a unique tracking ID:
+* **Header**: `X-Request-ID`
+* If the incoming request supplies an `X-Request-ID` header, it is preserved.
+* If missing, a UUID is automatically generated.
+* The `X-Request-ID` header is attached to all HTTP response headers and embedded within error payloads.
+
+---
+
+## 4. Standardized Error Response Contract
+API exceptions (4xx and 5xx) return a sanitized, structured JSON payload:
+
 ```json
 {
-  "status": "healthy",
-  "app_name": "CAREFlow India",
-  "version": "0.1.0",
-  "environment": "development",
-  "python_version": "3.12.7",
-  "database_status": "healthy",
-  "timestamp": "2026-08-30T19:40:00+00:00",
-  "database": {
-    "status": "healthy",
-    "engine": "sqlite",
-    "error": null
+  "detail": "Descriptive error message",
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Descriptive error message",
+    "request_id": "8f2d5a1b-3c4e-4f5a-8b1c-9d0e1f2a3b4c"
   }
 }
 ```
 
----
-
-### 2. Facilities API
-#### `GET /api/facilities`
-List healthcare facilities with optional filtering and pagination.
-
-**Query Parameters**:
-- `state` *(optional, string)*: Filter by state name (case-insensitive substring)
-- `district` *(optional, string)*: Filter by district name (case-insensitive substring)
-- `facility_type` *(optional, string)*: Filter by type (`DH`, `CHC`, `PHC`, `SC`, etc.)
-- `skip` *(optional, int, default=0)*: Pagination offset
-- `limit` *(optional, int, default=50, max=200)*: Items per page
-
-#### `GET /api/facilities/{facility_id}`
-Get detailed metadata for a single facility by ID.
+### Common Error Codes
+* `UNAUTHORIZED` (401): Missing, invalid, or expired JWT token.
+* `FORBIDDEN` (403): User role lacks permission.
+* `NOT_FOUND` (404): Resource not found.
+* `TOO_MANY_REQUESTS` (429): Login rate limit exceeded (5 attempts/min).
+* `VALIDATION_ERROR` (422): Request schema or query parameter validation failure.
+* `INTERNAL_SERVER_ERROR` (500): Sanitized internal server error (traceback suppressed from client).
 
 ---
 
-### 3. Indicators API
-#### `GET /api/indicators`
-List registered HMIS indicators.
-
----
-
-### 4. Observations Timeseries API
-#### `GET /api/facilities/{facility_id}/observations`
-List monthly healthcare observations for a specific facility.
-
----
-
-### 5. Healthcare Analytics Engine API (`/api/analytics/`)
-
-#### `GET /api/analytics/summary`
-Executive summary metrics across active facilities and indicators.
-- **Parameters**: `state` *(optional)*, `district` *(optional)*
-
-#### `GET /api/analytics/trends`
-Monthly time-series aggregations (totals, averages, reporting facility count, completeness %).
-- **Parameters**: `indicator_code` *(optional)*, `state` *(optional)*, `district` *(optional)*, `facility_id` *(optional)*, `start_month` *(optional)*, `end_month` *(optional)*
-
-#### `GET /api/analytics/regional`
-State and District level utilization aggregations, average per reporting facility, median per reporting facility, and MoM growth.
-- **Parameters**: `level` *('state' or 'district', default='district')*, `indicator_code` *(optional)*, `state` *(optional)*, `district` *(optional)*, `reporting_month` *(optional)*
-
-#### `GET /api/analytics/facilities`
-Facility-level analytical details, historical indicator trends, reporting completeness, missing reporting periods, and MoM growth per indicator.
-- **Parameters**: `facility_id` *(required)*, `indicator_code` *(optional)*
-
-#### `GET /api/analytics/compare`
-Side-by-side facility benchmarking across a target indicator.
-- **Parameters**: `facility_ids` *(required, multi-value)*, `indicator_code` *(required)*, `start_month` *(optional)*, `end_month` *(optional)*
-
-#### `GET /api/analytics/data-quality`
-Database-backed data quality metrics, issue severity counts, issue category breakdowns, and incomplete reporting facility lists.
-
----
-
-### 6. Forecasting & ML Engine API
-
-#### `GET /api/forecast`
-Generates or retrieves monthly healthcare demand forecasts for a facility/indicator.
-
-- **Query Parameters**:
-  - `facility_id` *(required, string)*: Facility ID or Facility Code (e.g. `fac_synth_dh_alpha`)
-  - `indicator_code` *(optional, string, default="opd_attendance")*: Indicator code (e.g. `opd_attendance`, `inpatient_admissions`, `institutional_deliveries`)
-  - `horizon` *(optional, int, default=12)*: Forecast horizon in months (allowed: `3`, `6`, `12`)
-
-- **Response Example (200 OK — SUCCESS)**:
-```json
-{
-  "status": "SUCCESS",
-  "facility": {
-    "id": "fac_synth_dh_alpha",
-    "name": "SYNTHETIC District Hospital Alpha",
-    "district": "SYNTHETIC_District_X",
-    "facility_type": "District Hospital"
-  },
-  "indicator": {
-    "id": "IND_opd_attendance",
-    "code": "opd_attendance",
-    "name": "Outpatient Department (OPD) Attendance",
-    "unit": "visits"
-  },
-  "forecast_horizon": 12,
-  "model": {
-    "model_version": "1.0.0",
-    "model_type": "Holt-Winters",
-    "is_baseline": true
-  },
-  "training_period": {
-    "start_month": "2022-01",
-    "end_month": "2024-12",
-    "total_observations": 36
-  },
-  "forecast_points": [
-    {
-      "forecast_month": "2025-01",
-      "forecast_date": "2025-01-01",
-      "predicted_value": 1150.5,
-      "lower_bound": 996.3,
-      "upper_bound": 1304.7
-    }
-  ],
-  "prediction_intervals": {
-    "interval_type": "95% prediction interval (approximate)",
-    "residual_std_error": 78.66
-  },
-  "validation_metrics": {
-    "mae": 78.66,
-    "rmse": 99.88,
-    "smape": 3.93,
-    "wape": 4.12,
-    "mape": 4.05
-  },
-  "baseline_metrics": {
-    "strongest_baseline_name": "Holt-Winters",
-    "strongest_baseline_mae": 78.66
-  },
-  "improvement_over_baseline_pct": 0.0,
-  "eligibility": {
-    "is_eligible": true,
-    "status": "ELIGIBLE",
-    "reason_code": null,
-    "reason_message": "Series meets all time-series forecasting eligibility criteria."
-  },
-  "explainability": {
-    "model_title": "Forecast generated using Holt-Winters",
-    "historical_months_count": 36,
-    "reporting_completeness_pct": "100.0%",
-    "validation_mae": 78.66,
-    "prediction_interval_description": "95% prediction interval (approximate residual-based bounds)",
-    "baseline_benchmark_model": "Holt-Winters",
-    "improvement_over_baseline": "0.0%",
-    "selection_rationale": "Strongest baseline 'Holt-Winters' selected. No ML candidate demonstrated validation MAE improvement over baseline."
-  },
-  "disclaimer": "SYNTHETIC / NON-REPRESENTATIVE — Validation performed on synthetic fixtures for framework verification."
-}
-```
-
-- **Response Example (200 OK — NOT_ELIGIBLE)**:
-```json
-{
-  "status": "NOT_ELIGIBLE",
-  "facility": {
-    "id": "fac_01",
-    "name": "District Hospital 1",
-    "district": "District X"
-  },
-  "indicator": {
-    "code": "opd_attendance",
-    "name": "Outpatient Department (OPD) Attendance"
-  },
-  "forecast_horizon": 12,
-  "eligibility": {
-    "is_eligible": false,
-    "status": "NOT_ELIGIBLE",
-    "reason_code": "INSUFFICIENT_HISTORY",
-    "reason_message": "Series has only 5 observation(s), minimum required is 12."
-  },
-  "disclaimer": "SYNTHETIC / NON-REPRESENTATIVE — Validation performed on synthetic fixtures for framework verification."
-}
-```
-
-#### `GET /api/model/metrics`
-Returns model registry summary across registered forecasting models.
-
-- **Query Parameters**:
-  - `target_indicator` *(optional, string)*: Filter by indicator code (e.g. `opd_attendance`)
-
-- **Response Example (200 OK)**:
-```json
-[
-  {
-    "model_version": "1.0.0",
-    "model_type": "SARIMAX",
-    "target_indicator": "inpatient_admissions",
-    "training_start": "2022-01",
-    "training_end": "2024-12",
-    "mae": 8.88,
-    "rmse": 11.71,
-    "mape": 4.25,
-    "baseline_mae": 10.89,
-    "improvement_over_baseline_pct": 18.41,
-    "created_at": "2026-08-30T15:52:45"
-  }
-]
-```
-
----
-
-## Standardized Error Response Format
-
-Errors return structured JSON with standard HTTP status codes:
-```json
-{
-  "detail": "Facility with ID 'FC_INVALID' not found."
-}
-```
-
+## 5. Security Headers & CORS Policy
+* **`X-Content-Type-Options`**: `nosniff`
+* **`X-Frame-Options`**: `DENY`
+* **`Referrer-Policy`**: `strict-origin-when-cross-origin`
+* **`Cache-Control`**: `no-store, max-age=0` (on authenticated API routes)
+* **CORS**: Restricted to configured origins (`CORS_ORIGINS`). Requests from unauthorized origins are rejected.

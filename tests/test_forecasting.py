@@ -3,8 +3,6 @@ import math
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from backend.app.main import app
-from backend.app.db.session import SessionLocal
 from backend.app.db.models.facility import Facility
 from backend.app.db.models.indicator import Indicator
 from backend.app.db.models.observation import Observation
@@ -23,8 +21,6 @@ from backend.app.services.forecasting.evaluation import TimeAwareValidator, calc
 from backend.app.services.forecasting.selection import ModelSelector
 from backend.app.services.forecasting.intervals import PredictionIntervalEstimator
 from backend.app.services.forecasting.forecast_service import ForecastingService
-
-client = TestClient(app)
 
 
 def create_synthetic_series(num_months: int = 36, missing_indices: list = None) -> ForecastingSeries:
@@ -254,7 +250,7 @@ def test_prediction_intervals_non_negative_bounds():
 # -------------------------------------------------------------------
 # 8. FORECAST API ENDPOINTS & PERSISTENCE TESTS
 # -------------------------------------------------------------------
-def test_forecast_api_valid_request(db_session: Session):
+def test_forecast_api_valid_request(client: TestClient, db_session: Session, auth_headers: dict):
     # Seed test indicator & facility into test in-memory DB
     ind = Indicator(id="IND_opd_attendance", code="opd_attendance", name="OPD Attendance", category="Outpatient", unit="count", active=True)
     fac = Facility(id="fac_synth_dh_alpha", facility_code="SYNTH_DH_1001", facility_name="District Hospital Alpha", facility_type="DH", state="State", district="Dist", raw_facility_name="DH Alpha")
@@ -262,7 +258,11 @@ def test_forecast_api_valid_request(db_session: Session):
     db_session.add(fac)
     db_session.commit()
 
-    response = client.get("/api/forecast?facility_id=fac_synth_dh_alpha&indicator_code=opd_attendance&horizon=12")
+    # Unauthenticated -> 401
+    res_unauth = client.get("/api/forecast?facility_id=fac_synth_dh_alpha&indicator_code=opd_attendance&horizon=12")
+    assert res_unauth.status_code == 401
+
+    response = client.get("/api/forecast?facility_id=fac_synth_dh_alpha&indicator_code=opd_attendance&horizon=12", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ("SUCCESS", "NOT_ELIGIBLE")
@@ -270,20 +270,23 @@ def test_forecast_api_valid_request(db_session: Session):
     assert "SYNTHETIC" in data["disclaimer"]
 
 
-
-def test_forecast_api_invalid_horizon():
-    response = client.get("/api/forecast?facility_id=fac_synth_dh_alpha&indicator_code=opd_attendance&horizon=5")
+def test_forecast_api_invalid_horizon(client: TestClient, auth_headers: dict):
+    response = client.get("/api/forecast?facility_id=fac_synth_dh_alpha&indicator_code=opd_attendance&horizon=5", headers=auth_headers)
     assert response.status_code == 400
     assert "Invalid forecast horizon" in response.json()["detail"]
 
 
-def test_forecast_api_not_found_facility():
-    response = client.get("/api/forecast?facility_id=non_existent_fac_9999&indicator_code=opd_attendance&horizon=12")
+def test_forecast_api_not_found_facility(client: TestClient, auth_headers: dict):
+    response = client.get("/api/forecast?facility_id=non_existent_fac_9999&indicator_code=opd_attendance&horizon=12", headers=auth_headers)
     assert response.status_code == 404
 
 
-def test_model_metrics_api():
-    response = client.get("/api/model/metrics")
+def test_model_metrics_api(client: TestClient, auth_headers: dict):
+    # Unauthenticated -> 401
+    res_unauth = client.get("/api/model/metrics")
+    assert res_unauth.status_code == 401
+
+    response = client.get("/api/model/metrics", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)

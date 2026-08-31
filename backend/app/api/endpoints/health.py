@@ -14,8 +14,8 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse)
 def get_health(db: Session = Depends(get_db)):
     """
-    System Health Endpoint. Performs real database connectivity verification via 'SELECT 1'.
-    Satisfies Phase 1 contract (app_name, database_status, python_version) and Phase 3 contract (database health details).
+    Public System Health Endpoint. Performs real database connectivity verification via 'SELECT 1'.
+    Safe for production status monitoring without exposing database URLs or internal credentials.
     """
     db_status = "unhealthy"
     db_error = None
@@ -24,8 +24,9 @@ def get_health(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
         db_status = "healthy"
-    except Exception as e:
-        db_error = str(e)
+    except Exception:
+        db_status = "unhealthy"
+        db_error = "Database connection failed"
 
     overall_status = "healthy" if db_status == "healthy" else "degraded"
 

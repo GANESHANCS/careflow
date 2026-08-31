@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.db.models.user import User
 from backend.app.core.security import verify_password, create_access_token
+from backend.app.core.rate_limit import login_rate_limiter
 from backend.app.schemas.auth import LoginRequest, TokenResponse, UserResponse
 from backend.app.api.deps import get_current_active_user
 
@@ -11,10 +12,20 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
     """
     Authenticate user via username/email and password. Returns signed JWT access token.
+    Protected by rate limiting against brute force attempts.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limit_key = f"login:{client_ip}:{login_data.username}"
+
+    if not login_rate_limiter.is_allowed(rate_limit_key, max_requests=5, window_seconds=60):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later."
+        )
+
     # Allow login via username or email
     user = db.query(User).filter(
         (User.username == login_data.username) | (User.email == login_data.username)
