@@ -1,5 +1,26 @@
 // API Type Definitions for CAREFlow Backend Service
 
+export interface User {
+  id: number;
+  username: string;
+  email: string | null;
+  role: 'ADMIN' | 'ANALYST' | 'VIEWER';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
+export interface LoginPayload {
+  username: string;
+  password: string;
+}
+
 export interface SystemHealth {
   status: string;
   app_name: string;

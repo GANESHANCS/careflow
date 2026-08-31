@@ -1,12 +1,18 @@
 # Core Backend Framework & Async Server
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
-pydantic>=2.6.0
+pydantic[email]>=2.6.0
 pydantic-settings>=2.2.0
 sqlalchemy>=2.0.28
 alembic>=1.13.0
 psycopg[binary]>=3.1.1
 python-dotenv>=1.0.1
+
+# Security & Authentication
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.1.0
+email-validator>=2.0.0
 
 # Data Foundation & Machine Learning
 pandas>=2.2.0
@@ -15,7 +21,6 @@ openpyxl>=3.1.2
 pyarrow>=15.0.0
 scikit-learn>=1.4.0
 statsmodels>=0.14.0
-
 
 # Testing & Verification
 pytest>=8.0.0

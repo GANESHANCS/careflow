@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Activity, Search, Menu, X, User, Server } from 'lucide-react';
+import { Activity, Search, Menu, X, LogOut, LogIn, Server } from 'lucide-react';
 import { api } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import type { SystemHealth } from '../../api/types';
 
 export interface TopNavProps {
@@ -13,7 +14,9 @@ export interface TopNavProps {
 
 export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const shouldReduceMotion = useReducedMotion();
+  const { user, isAuthenticated, logout } = useAuth();
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [isHealthLoading, setIsHealthLoading] = useState(true);
 
@@ -35,6 +38,11 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
     return () => { isMounted = false; };
   }, []);
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   const navLinks = [
     { label: 'Overview', path: '/overview' },
     { label: 'Facilities', path: '/facilities' },
@@ -48,7 +56,7 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand Logo & Tag */}
         <div className="flex items-center gap-6">
-          <NavLink to="/overview" className="flex items-center gap-2.5 group focus-ring rounded-lg p-1">
+          <NavLink to={isAuthenticated ? '/overview' : '/'} className="flex items-center gap-2.5 group focus-ring rounded-lg p-1">
             <motion.div
               whileHover={shouldReduceMotion ? undefined : { scale: 1.06, rotate: 3 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
@@ -95,7 +103,7 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
           </nav>
         </div>
 
-        {/* Right Section: API Health Indicator, Search, Profile */}
+        {/* Right Section: API Health Indicator, Search, Auth Actions */}
         <div className="flex items-center gap-3">
           {/* Backend API Health Status Indicator */}
           <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)]">
@@ -106,7 +114,7 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
             </span>
           </div>
 
-          {/* Search Input Bar (Preview) */}
+          {/* Search Input Bar */}
           <div className="hidden lg:flex items-center relative">
             <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
             <input
@@ -116,15 +124,35 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
             />
           </div>
 
-          {/* User / Profile Avatar Button */}
-          <motion.button
-            whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
-            whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] rounded-full transition-colors cursor-pointer focus-ring"
-            title="User Profile"
-          >
-            <User className="w-4 h-4" />
-          </motion.button>
+          {/* User Auth Info & Logout / Login */}
+          {isAuthenticated && user ? (
+            <div className="flex items-center gap-2">
+              <div className="hidden xl:flex flex-col items-end text-xs">
+                <span className="font-semibold text-[var(--text-primary)]">{user.username}</span>
+                <span className="px-1.5 py-0.5 text-[10px] uppercase font-bold rounded bg-amber-100 text-amber-800 tracking-wider">
+                  {user.role}
+                </span>
+              </div>
+              <motion.button
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:text-red-700 bg-stone-100 hover:bg-red-50 border border-stone-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer focus-ring"
+                title="Sign Out of Terminal"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Logout</span>
+              </motion.button>
+            </div>
+          ) : (
+            <NavLink
+              to="/login"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#0F4C81] hover:bg-[#0A3459] rounded-lg transition-colors cursor-pointer shadow-xs focus-ring"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Terminal Login</span>
+            </NavLink>
+          )}
 
           {/* Mobile Menu Toggle Button */}
           <motion.button

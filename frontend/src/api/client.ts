@@ -9,10 +9,14 @@ import type {
   FacilityAnalyticsResponse,
   DataQualityAnalyticsResponse,
   ForecastResponse,
-  ModelMetrics
+  ModelMetrics,
+  User,
+  TokenResponse,
+  LoginPayload
 } from './types';
 
 const API_BASE_URL = '/api';
+const TOKEN_KEY = 'careflow_access_token';
 
 export class ApiError extends Error {
   status: number;
@@ -26,16 +30,40 @@ export class ApiError extends Error {
   }
 }
 
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function removeStoredToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = getStoredToken();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
       ...options,
+      headers,
     });
+
+    if (res.status === 401 && endpoint !== '/auth/login') {
+      removeStoredToken();
+    }
 
     if (!res.ok) {
       let errorMsg = `API Error (${res.status} ${res.statusText})`;
@@ -46,7 +74,7 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
           errorMsg = errorData.detail;
         }
       } catch {
-        // Fallback to text
+        // Fallback
       }
       throw new ApiError(errorMsg, res.status, errorData);
     }
@@ -62,6 +90,31 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
 }
 
 export const api = {
+  // Authentication
+  login: async (payload: LoginPayload): Promise<TokenResponse> => {
+    const response = await fetchJson<TokenResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (response.access_token) {
+      setStoredToken(response.access_token);
+    }
+    return response;
+  },
+
+  getMe: (): Promise<User> => fetchJson<User>('/auth/me'),
+
+  logout: async (): Promise<{ message: string }> => {
+    try {
+      const res = await fetchJson<{ message: string }>('/auth/logout', { method: 'POST' });
+      removeStoredToken();
+      return res;
+    } catch {
+      removeStoredToken();
+      return { message: 'Logged out' };
+    }
+  },
+
   // Health
   getHealth: () => fetchJson<SystemHealth>('/health'),
 

@@ -43,3 +43,10 @@ def override_get_db(db_session):
     app.dependency_overrides[get_db] = _override
     yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def client(db_session):
+    """Test client bound to isolated database session."""
+    with TestClient(app) as c:
+        yield c
