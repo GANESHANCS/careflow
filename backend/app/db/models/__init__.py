@@ -5,6 +5,9 @@ from backend.app.db.models.observation import Observation
 from backend.app.db.models.forecast import Forecast
 from backend.app.db.models.model_metadata import ModelMetadata
 from backend.app.db.models.data_quality import DataQualityLog
+from backend.app.db.models.user import User
+from backend.app.db.models.import_job import ImportJob
+from backend.app.db.models.import_error_log import ImportErrorLog
 
 __all__ = [
     "Base",
@@ -14,5 +17,8 @@ __all__ = [
     "Observation",
     "Forecast",
     "ModelMetadata",
-    "DataQualityLog"
+    "DataQualityLog",
+    "User",
+    "ImportJob",
+    "ImportErrorLog"
 ]

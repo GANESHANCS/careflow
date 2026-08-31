@@ -11,13 +11,14 @@ from backend.app.db.seed import seed_standard_indicators
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Safe non-destructive schema initialization for local environment
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        seed_standard_indicators(db)
-    finally:
-        db.close()
+    # automatic create_all only in development/testing environments
+    if settings.ENVIRONMENT.lower() in ["development", "testing"]:
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_standard_indicators(db)
+        finally:
+            db.close()
     yield
 
 

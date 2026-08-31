@@ -8,6 +8,9 @@ from backend.app.db.models.observation import Observation
 from backend.app.db.models.forecast import Forecast
 from backend.app.db.models.model_metadata import ModelMetadata
 from backend.app.db.models.data_quality import DataQualityLog
+from backend.app.db.models.user import User
+from backend.app.db.models.import_job import ImportJob
+from backend.app.db.models.import_error_log import ImportErrorLog
 
 
 def test_facility_model_creation_and_uniqueness(db_session: Session):
@@ -126,3 +129,78 @@ def test_observation_preserves_missing_vs_zero(db_session: Session):
 
     assert saved_m.value is None
     assert saved_m.value_type == "MISSING"
+
+
+def test_user_model_creation_and_uniqueness(db_session: Session):
+    user = User(
+        username="health_admin",
+        email="admin@careflow.gov.in",
+        hashed_password="secure_hashed_password_string",
+        role="ADMIN",
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    saved_user = db_session.query(User).filter(User.username == "health_admin").first()
+    assert saved_user is not None
+    assert saved_user.role == "ADMIN"
+    assert saved_user.is_active is True
+    assert saved_user.created_at is not None
+
+    # Duplicate username should fail
+    dup_user = User(
+        username="health_admin",
+        hashed_password="another_password",
+        role="ANALYST"
+    )
+    db_session.add(dup_user)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+
+
+def test_import_job_and_error_log_relationship(db_session: Session):
+    job = ImportJob(
+        job_code="JOB-20260831-001",
+        original_filename="hmis_2024_q1.xlsx",
+        file_size_bytes=1048576,
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        status="PROCESSING",
+        total_records=150,
+        records_imported=140,
+        records_rejected=10,
+        quality_score=93.5
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    saved_job = db_session.query(ImportJob).filter(ImportJob.job_code == "JOB-20260831-001").first()
+    assert saved_job is not None
+    assert saved_job.status == "PROCESSING"
+
+    # Add error logs associated with this import job
+    err1 = ImportErrorLog(
+        import_job_id=saved_job.id,
+        source_row=12,
+        source_sheet="Maternal Health",
+        error_code="INVALID_DATE_FORMAT",
+        severity="WARNING",
+        message="Date column contained ambiguous string value."
+    )
+    err2 = ImportErrorLog(
+        import_job_id=saved_job.id,
+        source_row=45,
+        source_sheet="Outpatient",
+        error_code="UNMAPPED_INDICATOR",
+        severity="ERROR",
+        message="Column header could not be mapped to catalog indicator."
+    )
+    db_session.add_all([err1, err2])
+    db_session.commit()
+
+    # Query job with relationships
+    queried_job = db_session.query(ImportJob).filter(ImportJob.id == saved_job.id).first()
+    assert queried_job is not None
+    assert len(queried_job.error_logs) == 2
+    assert queried_job.error_logs[0].error_code == "INVALID_DATE_FORMAT"

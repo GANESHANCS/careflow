@@ -1,18 +1,22 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from backend.app.core.config import settings
-from backend.app.db.models.base import Base
 
-# Adjust connection arguments based on database engine dialect
-connect_args = {}
+# Adjust engine parameters based on database dialect (SQLite vs PostgreSQL)
+engine_kwargs = {"echo": False}
+
 if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # Production-grade PostgreSQL pooling parameters
+    engine_kwargs.update({
+        "pool_pre_ping": True,
+        "pool_size": settings.DB_POOL_SIZE,
+        "max_overflow": settings.DB_MAX_OVERFLOW,
+        "pool_recycle": settings.DB_POOL_RECYCLE,
+    })
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    echo=False # Clean execution without verbose SQL output unless needed
-)
+engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
