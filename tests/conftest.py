@@ -4,11 +4,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
+from pathlib import Path
 from backend.app.main import app
 from backend.app.db.models.base import Base
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db
 from backend.app.core.security import hash_password, create_access_token
+from backend.app.services.imports.storage import ImportStorageService
 
 # Isolated in-memory SQLite database for fast isolated unit tests
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -19,6 +21,24 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def isolate_test_upload_storage(tmp_path, monkeypatch):
+    """
+    Hermetic test isolation: Redirects all import file uploads during testing to a
+    temporary directory managed by pytest, preventing directory accumulation in data/uploads.
+    """
+    test_upload_dir = tmp_path / "test_uploads"
+    test_upload_dir.mkdir(parents=True, exist_ok=True)
+
+    original_init = ImportStorageService.__init__
+
+    def _mock_init(self, base_upload_dir: str = None):
+        original_init(self, base_upload_dir=str(test_upload_dir))
+
+    monkeypatch.setattr(ImportStorageService, "__init__", _mock_init)
+    yield test_upload_dir
 
 
 @pytest.fixture(scope="function")

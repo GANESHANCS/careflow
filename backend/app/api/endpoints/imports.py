@@ -55,10 +55,10 @@ def upload_hmis_file(
             detail=e.message
         )
     except Exception as e:
-        logger.exception(f"Import upload creation failed: {e}")
+        logger.exception(f"Import upload creation failed for file '{file.filename}': {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import upload failure: {str(e)}"
+            detail="An error occurred while uploading and queuing the import file. Please check server logs."
         )
 
     if is_duplicate:
@@ -69,10 +69,10 @@ def upload_hmis_file(
     try:
         service.process_import_job(job.id)
     except Exception as e:
-        logger.exception(f"Import job processing failed: {e}")
+        logger.exception(f"Import job processing failed for job {job.job_code}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import processing failure: {str(e)}"
+            detail="An error occurred during dataset processing and persistence. The import job could not be completed."
         )
 
     # Refresh job from DB to return completed status

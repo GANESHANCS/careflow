@@ -216,6 +216,12 @@ describe('OverviewPage Component', () => {
     const districtBtn = screen.getByRole('button', { name: /view district-level aggregations/i });
     fireEvent.click(districtBtn);
 
-    expect(api.getRegionalAnalytics).toHaveBeenCalledWith(expect.objectContaining({ level: 'district' }));
+    await waitFor(() => {
+      expect(api.getRegionalAnalytics).toHaveBeenCalledWith(expect.objectContaining({ level: 'district' }));
+    });
+
+    await waitFor(() => {
+      expect(districtBtn).toHaveClass('text-[var(--teal-700)]');
+    });
   });
 });

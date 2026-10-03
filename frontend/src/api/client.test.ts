@@ -20,6 +20,7 @@ describe('API Client Layer', () => {
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      headers: new Headers({ 'X-Request-ID': 'req-health-123' }),
       json: async () => mockHealth,
     } as Response);
 
@@ -28,15 +29,55 @@ describe('API Client Layer', () => {
     expect(res.app_name).toBe('CAREFlow India');
   });
 
-  it('throws ApiError on failed response', async () => {
+  it('throws ApiError on failed response and extracts requestId and code', async () => {
+    const errorBody = {
+      detail: 'Facility FC_999 not found',
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Facility FC_999 not found',
+        request_id: 'req-err-456'
+      }
+    };
+
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
       statusText: 'Not Found',
-      json: async () => ({ detail: 'Facility FC_999 not found' }),
-    } as Response);
+      headers: new Headers({ 'X-Request-ID': 'req-err-456' }),
+      json: async () => errorBody,
+    } as unknown as Response);
 
-    await expect(api.getFacilityById('FC_999')).rejects.toThrow(ApiError);
+    try {
+      await api.getFacilityById('FC_999');
+      expect.fail('Should have thrown ApiError');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.status).toBe(404);
+      expect(apiErr.message).toBe('Facility FC_999 not found');
+      expect(apiErr.requestId).toBe('req-err-456');
+      expect(apiErr.code).toBe('NOT_FOUND');
+    }
+  });
+
+  it('extracts requestId from header when json lacks error object', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Headers({ 'X-Request-ID': 'header-req-789' }),
+      json: async () => ({ detail: 'Server exploded' }),
+    } as unknown as Response);
+
+    try {
+      await api.getIndicators();
+      expect.fail('Should have thrown ApiError');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.status).toBe(500);
+      expect(apiErr.requestId).toBe('header-req-789');
+    }
   });
 
   it('uploads import file successfully with FormData', async () => {
@@ -59,6 +100,7 @@ describe('API Client Layer', () => {
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      headers: new Headers(),
       json: async () => mockJob,
     } as Response);
 
@@ -98,6 +140,7 @@ describe('API Client Layer', () => {
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      headers: new Headers(),
       json: async () => mockList,
     } as Response);
 
@@ -106,4 +149,3 @@ describe('API Client Layer', () => {
     expect(res.items[0].job_code).toBe('JOB_1');
   });
 });
-

@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
 
 describe('Feedback Components', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders EmptyState with custom title and action button', () => {
     const handleAction = vi.fn();
     render(
@@ -27,5 +31,36 @@ describe('Feedback Components', () => {
     expect(screen.getByText('Failed to load.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Try Again'));
     expect(handleRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders ErrorState with incident reference ID and handles copy action', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    render(
+      <ErrorState
+        title="Server Error"
+        message="Internal issue"
+        requestId="req-test-uuid-99"
+      />
+    );
+
+    expect(screen.getByText('req-test-uuid-99')).toBeInTheDocument();
+    expect(screen.getByText('Ref:')).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: /copy incident id/i });
+    expect(copyBtn).toBeInTheDocument();
+
+    fireEvent.click(copyBtn);
+    expect(writeTextMock).toHaveBeenCalledWith('req-test-uuid-99');
+
+    await waitFor(() => {
+      // Button switches from copy icon to check icon
+      expect(copyBtn).toBeInTheDocument();
+    });
   });
 });

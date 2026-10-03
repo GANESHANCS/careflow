@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -12,9 +12,10 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse)
-def get_health(db: Session = Depends(get_db)):
+def get_health(response: Response, db: Session = Depends(get_db)):
     """
     Public System Health Endpoint. Performs real database connectivity verification via 'SELECT 1'.
+    Returns HTTP 200 when healthy, or HTTP 503 Service Unavailable when database connection fails.
     Safe for production status monitoring without exposing database URLs or internal credentials.
     """
     db_status = "unhealthy"
@@ -29,6 +30,8 @@ def get_health(db: Session = Depends(get_db)):
         db_error = "Database connection failed"
 
     overall_status = "healthy" if db_status == "healthy" else "degraded"
+    if overall_status != "healthy":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return HealthResponse(
         status=overall_status,
@@ -44,3 +47,40 @@ def get_health(db: Session = Depends(get_db)):
             error=db_error
         )
     )
+
+
+@router.get("/healthz")
+def liveness_check():
+    """
+    Liveness probe for container orchestrators (Kubernetes / Docker).
+    Returns 200 OK immediately if the web process is running.
+    """
+    return {
+        "status": "alive",
+        "app_name": settings.PROJECT_NAME,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.get("/readyz")
+def readiness_check(response: Response, db: Session = Depends(get_db)):
+    """
+    Readiness probe for container orchestrators.
+    Returns 200 OK if critical dependencies (database) are accessible,
+    or 503 Service Unavailable if dependencies are unreachable.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "ready",
+            "database": "connected",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "not_ready",
+            "database": "disconnected",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+

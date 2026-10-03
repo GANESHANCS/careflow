@@ -25,12 +25,16 @@ const TOKEN_KEY = 'careflow_access_token';
 export class ApiError extends Error {
   status: number;
   data: unknown;
+  requestId?: string;
+  code?: string;
 
-  constructor(message: string, status: number, data?: unknown) {
+  constructor(message: string, status: number, data?: unknown, requestId?: string, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.requestId = requestId;
+    this.code = code;
   }
 }
 
@@ -67,22 +71,36 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
       headers,
     });
 
+    const requestIdHeader = res.headers.get('X-Request-ID') || res.headers.get('x-request-id') || undefined;
+
     if (res.status === 401 && endpoint !== '/auth/login') {
       removeStoredToken();
     }
 
     if (!res.ok) {
       let errorMsg = `API Error (${res.status} ${res.statusText})`;
-      let errorData = null;
+      let errorData: any = null;
+      let parsedRequestId = requestIdHeader;
+      let parsedCode: string | undefined = undefined;
+
       try {
         errorData = await res.json();
         if (errorData?.detail) {
-          errorMsg = errorData.detail;
+          errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        }
+        if (errorData?.error?.message) {
+          errorMsg = errorData.error.message;
+        }
+        if (errorData?.error?.request_id) {
+          parsedRequestId = errorData.error.request_id;
+        }
+        if (errorData?.error?.code) {
+          parsedCode = errorData.error.code;
         }
       } catch {
         // Fallback
       }
-      throw new ApiError(errorMsg, res.status, errorData);
+      throw new ApiError(errorMsg, res.status, errorData, parsedRequestId, parsedCode);
     }
 
     return (await res.json()) as T;

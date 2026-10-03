@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 7G — HMIS IMPORT & AUDIT WORKSPACE (COMPLETE & VERIFIED)
+## Current Phase: PHASE 7H — PRODUCTION HARDENING, DEPLOYMENT READINESS & CI/CD (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -24,6 +24,7 @@
 - **PHASE 7E (Real HMIS Ingestion Engine)**: Complete & Verified.
 - **PHASE 7F (Import REST API)**: Complete & Verified.
 - **PHASE 7G (HMIS Import & Audit Workspace)**: Complete & Verified.
+- **PHASE 7H (Production Hardening, Deployment Readiness & CI/CD)**: Complete & Verified.
 
 ---
 
@@ -37,59 +38,45 @@
 
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
-| **Full Pytest Backend Suite** | `D:\careflow\.venv\Scripts\pytest.exe D:\careflow\tests` | **PASSED** | **91/91 passed** (Phase 1-5 suites + 7A/7B DB & config + 7C auth + 7D security + 7E/7F import engine lifecycle, RBAC, non-destructive ingestion, idempotency) |
-| **Full Vitest Frontend Suite** | `npm run test` (in `frontend/`) | **PASSED** | **58/58 passed** (All 12 test files passing: Landing, Overview, Facilities, FacilityDetail, Regions, Forecast, DataQuality, ImportPage, LoginPage, Button, Feedback, API) |
-| **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React + TypeScript + Vite build succeeded with **0 errors** |
-| **Alembic Database Migration** | `alembic upgrade head` | **PASSED** | Migrations `56a26ed15259` and `e63cafcc4f9d` (`add_file_hash_to_import_jobs`) applied cleanly against database |
+| **Full Pytest Backend Suite** | `pytest tests` | **PASSED** | **94/94 passed** (Phase 1-5 analytics/ML suites + 7A/7B DB & config + 7C auth + 7D security + 7E/7F imports + 7H health/liveness/readiness 503 & sanitized error tests) |
+| **Full Vitest Frontend Suite** | `npm run test` (in `frontend/`) | **PASSED** | **63/63 passed** (All 13 test files passing: Landing, Overview, Facilities, FacilityDetail, Regions, Forecast, DataQuality, ImportPage, LoginPage, Button, Feedback, ErrorBoundary, API Client) with **0 act warnings** |
+| **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React 19 + TypeScript + Vite build succeeded with **0 warnings** (main chunk 257 kB gzip 81 kB; route code-splitting verified) |
+| **Alembic Database Migration** | `alembic upgrade head` | **PASSED** | Current schema at revision `e63cafcc4f9d` (`add_file_hash_to_import_jobs`) |
+| **Upload Directory Isolation** | `pytest tests/test_phase_7ef_imports.py` | **PASSED** | Uploads isolated to `tmp_path`; `data/uploads` remains hermetic with 0 test directories accumulated |
 
 ---
 
-## Phase 7E/7F Deliverables
+## Phase 7H Deliverables (Production Hardening, Deployment Readiness & CI/CD)
 
-1. **Import Job Lifecycle Models**:
-   - `backend/app/db/models/import_job.py`: `ImportJob` model tracking lifecycle states (`QUEUED`, `PROCESSING`, `VALIDATED`, `COMPLETED`, `COMPLETED_WITH_WARNINGS`, `FAILED`), metrics, file hashes, and quality scores.
-   - `backend/app/db/models/import_error_log.py`: `ImportErrorLog` model logging row, sheet, error code, severity (`CRITICAL`, `ERROR`, `WARNING`, `INFO`), and diagnostic messages.
+1. **Production Docker Deployment & Container Hardening**:
+   * `Dockerfile`: Updated with `alembic.ini`, non-root user (`careflow`, UID 1000), container `HEALTHCHECK`, and `scripts/entrypoint.sh` applying database migrations before server launch.
+   * `docker-compose.yml`: Multi-container stack configured with `postgres`, `backend`, and `frontend` services, environment variable substitution for `SECRET_KEY`, and persistent `uploads_data` volume.
+   * `frontend/Dockerfile` & `frontend/nginx.conf`: Multi-stage build (Node 24 Alpine builder + Nginx Alpine runner) with SPA client-side routing fallback (`try_files $uri /index.html`), API reverse proxying `/api` to backend, and production security headers.
+   * *Local Environment Note*: Docker Engine is not installed on the local Windows host; container specifications were statically verified and automated in the GitHub Actions CI pipeline without claiming local daemon execution.
 
-2. **Secure Ingestion & Validation Services**:
-   - `backend/app/services/imports/storage.py`: Storage manager with SHA-256 fingerprint calculation, `JOB_YYYYMMDD_HHMMSS_xxx` job code generation, and path traversal sanitization.
-   - `backend/app/services/imports/validator.py`: Constraint validator (50 MB limit, extension and MIME type validation) and idempotency inspector.
-   - `backend/app/services/imports/import_service.py`: Orchestrates Phase 2 pipeline components (`HMISFileInspector`, `HMISSchemaNormalizer`, `IndicatorCatalog`, `HMISEntityStandardizer`, `DeduplicationEngine`, `HMISQualityEngine`) with atomic DB commits.
+2. **Health, Readiness & Error Sanitization**:
+   * `backend/app/api/endpoints/health.py`:
+     * `GET /api/health` and `GET /api/v1/health`: Returns HTTP 200 when healthy and HTTP 503 Service Unavailable when database connection is degraded.
+     * `GET /api/healthz`: High-frequency liveness probe for orchestrators returning HTTP 200 immediately.
+     * `GET /api/readyz`: Deep readiness probe verifying database connectivity, returning HTTP 200 on success or HTTP 503 on failure.
+   * `backend/app/api/endpoints/imports.py`: Sanitized internal error handling, preventing exposure of raw tracebacks, filesystem paths, or database errors to API clients.
 
-3. **Non-Destructive Ingestion & Data Integrity Rules**:
-   - Explicit zero values (`0.0`) are preserved with `ValueClassification.ZERO`.
-   - Missing values (`None`, `""`, `"N/A"`) are tagged `ValueClassification.MISSING` and are **never** coerced to `0.0`.
-   - Re-importing observations never overwrites an existing valid numeric value with `None`.
+3. **Observability, Distributed Tracing & Frontend Resilience**:
+   * `frontend/src/api/client.ts`: Extended `ApiError` with `requestId` and `code` properties, parsing `X-Request-ID` from response headers and structured error bodies.
+   * `frontend/src/components/feedback/ErrorState.tsx`: Added incident reference ID display with one-click copy-to-clipboard action.
+   * `frontend/src/components/feedback/ErrorBoundary.tsx`: React class-based Error Boundary wrapping the application in `App.tsx`, providing graceful error containment, incident tracking, and view recovery without white-screen crashes.
 
-4. **Authenticated Import REST API**:
-   - `backend/app/api/endpoints/imports.py`:
-     - `POST /api/imports`: Upload spreadsheet file (RBAC: `ADMIN`, `ANALYST`).
-     - `GET /api/imports`: Paginated list of import jobs with search and status filtering.
-     - `GET /api/imports/{job_code}`: Retrieve job execution metrics and status.
-     - `GET /api/imports/{job_code}/quality`: Retrieve 13-point data quality score breakdown and findings.
-     - `GET /api/imports/{job_code}/errors`: Retrieve paginated diagnostic error logs.
+4. **Continuous Integration (GitHub Actions)**:
+   * `.github/workflows/ci.yml`: Automated CI pipeline triggered on `push` and `pull_request` against `main`, running Python 3.12 pytest suite, Node 24 Vitest suite, Oxlint check, production bundle build, and Docker configuration validation.
 
-5. **Automated Integration Tests & Documentation**:
-   - `tests/test_phase_7ef_imports.py`: 14 comprehensive tests covering upload constraints, RBAC, missing/zero preservation, non-destructive overwriting, idempotency hashing, pagination, and error handling.
-   - `docs/IMPORT_PIPELINE.md`: Complete pipeline architecture, data integrity policies, lifecycle states, and API specification.
+5. **Test Suite Hygiene & Warning Remediation**:
+   * `tests/conftest.py`: Added `isolate_test_upload_storage` autouse fixture redirecting all test uploads to pytest-managed `tmp_path`, eliminating filesystem pollution in `data/uploads/`.
+   * `frontend/src/pages/OverviewPage.test.tsx`: Corrected asynchronous state transition awaiting in regional toggle test, eliminating all 5 React `act(...)` console warnings.
 
----
+6. **Frontend Route-Level Code Splitting**:
+   * `frontend/src/routes/AppRoutes.tsx`: Configured dynamic imports with `React.lazy` and `Suspense` for all operational page views, reducing the initial JavaScript bundle from 686 kB to 257 kB and eliminating Vite chunk size warnings.
 
-## Phase 7G Deliverables (HMIS Import & Audit Workspace)
-
-1. **HMIS Import / Audit Workspace Page (`/imports`)**:
-   - `frontend/src/pages/ImportPage.tsx`: Primary ingestion workspace providing status telemetry, interactive upload controls, paginated import history, quality scorecard inspection, and diagnostic error log viewer.
-   - Accessible via `/imports` with client-side role authorization protecting upload actions.
-
-2. **Modular Workspace Components**:
-   - `frontend/src/components/imports/FileUploadZone.tsx`: Drag-and-drop / file selector with client-side validation (`.csv`, `.xlsx`, `.xls` <= 50MB) and visual restriction banners for `VIEWER` roles.
-   - `frontend/src/components/imports/ImportHistoryTable.tsx`: Tabular history viewer with status badges, pagination, search/filtering, and action buttons for quality inspection and error logs.
-   - `frontend/src/components/imports/ImportQualityModal.tsx`: Modal displaying the 13-point HMIS quality audit score, dimension breakdowns (completeness, validity, consistency, timeliness, accuracy), and findings.
-   - `frontend/src/components/imports/ImportErrorLogViewer.tsx`: Paginated diagnostic error viewer with severity badges (`CRITICAL`, `ERROR`, `WARNING`, `INFO`) and row/sheet localization.
-
-3. **Frontend API Client Integration**:
-   - `frontend/src/api/client.ts` & `frontend/src/api/types.ts`: Extended with `uploadImportFile`, `getImportJobs`, `getImportJob`, `getImportJobQuality`, and `getImportJobErrors` API methods and TypeScript interfaces.
-   - `frontend/src/api/client.test.ts`: Added tests verifying multipart upload and query param handling.
-
-4. **Database Schema & Migration Alignment**:
-   - `backend/app/db/migrations/versions/e63cafcc4f9d_add_file_hash_to_import_jobs.py`: Added `file_hash` (`VARCHAR(64)`, nullable) and index `ix_import_jobs_file_hash` to `import_jobs`.
-
+7. **Production Operations Documentation**:
+   * `docs/DEPLOYMENT_RUNBOOK.md`: Comprehensive step-by-step production deployment guide covering environment settings, Docker Compose, Nginx reverse proxy, TLS, backups, and disaster recovery.
+   * `docs/OPERATIONS_AND_OBSERVABILITY.md`: Detailed operations runbook covering structured JSON log formats, `X-Request-ID` correlation, health probes, and incident triage scenarios.
+   * `README.md`: Updated to accurately reflect React 19 stack and Docker deployment quickstart.

@@ -10,9 +10,10 @@ CAREFlow India is a production-grade healthcare analytics, workflow management, 
 - **Capacity Planning**: Operational intelligence insights for healthcare administrators, public health researchers, and government decision-makers.
 
 ## Architecture Stack
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4, Lucide Icons.
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Lucide Icons.
 - **Backend**: FastAPI, Pydantic v2, SQLAlchemy 2.0, Uvicorn.
 - **Database**: PostgreSQL (Production) / SQLite (Local Development Adapter).
+- **Deployment**: Docker, Docker Compose, Nginx, GitHub Actions CI/CD.
 - **Data & ML**: pandas, NumPy, scikit-learn, statsmodels.
 
 ## Quick Start
@@ -20,8 +21,11 @@ CAREFlow India is a production-grade healthcare analytics, workflow management, 
 ### 1. Prerequisites
 - Python 3.12+
 - Node.js v24+ / npm 11+
+- Docker & Docker Compose (optional for containerized deployment)
 
-### 2. Backend Setup
+### 2. Local Development Setup
+
+#### Backend Setup
 ```bash
 # Activate virtual environment
 .\.venv\Scripts\activate
@@ -34,7 +38,7 @@ uvicorn backend.app.main:app --reload --port 8000
 ```
 API Documentation will be available at `http://127.0.0.1:8000/api/docs`.
 
-### 3. Frontend Setup
+#### Frontend Setup
 ```bash
 cd frontend
 npm install
@@ -42,11 +46,23 @@ npm run dev
 ```
 Access the application UI at `http://localhost:5173`.
 
+### 3. Production Docker Deployment
+```bash
+cp .env.example .env
+# Configure SECRET_KEY and POSTGRES credentials in .env
+docker compose build
+docker compose up -d
+```
+Application will be accessible via Nginx at `http://localhost:80`.
+
 ## Documentation
+- [Production Deployment Runbook](docs/DEPLOYMENT_RUNBOOK.md)
+- [Operations & Observability Guide](docs/OPERATIONS_AND_OBSERVABILITY.md)
 - [Architecture Blueprint](docs/ARCHITECTURE.md)
 - [Development Guide](docs/DEVELOPMENT.md)
 - [HMIS Import Pipeline](docs/IMPORT_PIPELINE.md)
 - [API Architecture & Specification](docs/API.md)
 - [Authentication & RBAC](docs/AUTHENTICATION.md)
 - [Security & Governance](docs/SECURITY.md)
+- [Production Configuration & Hardening](docs/PRODUCTION_CONFIGURATION.md)
 - [Project Status & Verification](docs/PROJECT_STATUS.md)
