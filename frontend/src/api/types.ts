@@ -326,3 +326,74 @@ export interface ModelMetrics {
   improvement_over_baseline_pct: number | null;
   created_at: string | null;
 }
+
+// -------------------------------------------------------------------
+// HMIS Data Ingestion & Import Workspace Types (Phase 7G)
+// -------------------------------------------------------------------
+
+export type ImportJobStatus =
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'VALIDATED'
+  | 'COMPLETED'
+  | 'COMPLETED_WITH_WARNINGS'
+  | 'FAILED';
+
+export interface ImportJob {
+  id: number;
+  job_code: string;
+  original_filename: string;
+  file_size_bytes: number | null;
+  mime_type: string | null;
+  file_hash: string | null;
+  status: ImportJobStatus | string;
+  total_records: number;
+  records_imported: number;
+  records_rejected: number;
+  quality_score: number | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface ImportJobListResponse {
+  total: number;
+  items: ImportJob[];
+  page: number;
+  page_size: number;
+}
+
+export interface ImportQualityFinding {
+  code: string;
+  severity: string;
+  message: string;
+  row: number | null;
+  sheet: string | null;
+}
+
+export interface ImportJobQualityResponse {
+  job_code: string;
+  overall_quality_score: number;
+  total_issues: number;
+  severity_counts: Record<string, number>;
+  category_scores: Record<string, number>;
+  findings: ImportQualityFinding[];
+}
+
+export interface ImportErrorLog {
+  id: number;
+  import_job_id: number;
+  source_row: number | null;
+  source_sheet: string | null;
+  error_code: string;
+  severity: 'CRITICAL' | 'ERROR' | 'WARNING' | 'INFO' | string;
+  message: string;
+  created_at: string;
+}
+
+export interface ImportErrorLogListResponse {
+  total: number;
+  items: ImportErrorLog[];
+  page: number;
+  page_size: number;
+}

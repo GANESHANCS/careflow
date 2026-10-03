@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 7E / 7F — REAL HMIS INGESTION ENGINE & IMPORT APIS (COMPLETE & VERIFIED)
+## Current Phase: PHASE 7G — HMIS IMPORT & AUDIT WORKSPACE (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -23,12 +23,13 @@
 - **PHASE 7D (Secure API Layer & Middleware)**: Complete & Verified.
 - **PHASE 7E (Real HMIS Ingestion Engine)**: Complete & Verified.
 - **PHASE 7F (Import REST API)**: Complete & Verified.
+- **PHASE 7G (HMIS Import & Audit Workspace)**: Complete & Verified.
 
 ---
 
 ## REAL HMIS FILE AVAILABILITY STATUS
-**REAL HMIS FILES FOUND**: **YES / VERIFIED INGESTION ENGINE**  
-*The production HMIS Data Ingestion Engine is fully operational. Files uploaded via `POST /api/imports` (`.csv`, `.xlsx`, `.xls`) are inspected, normalized, audited for quality, and persisted into operational tables atomically.*
+**REAL HMIS FILES FOUND**: **NOT PRESENT / SYNTHETIC BASELINE ONLY**  
+*Real external HMIS spreadsheet files are not yet present or loaded in the development environment. The HMIS Data Ingestion Engine and the `/imports` frontend workspace have been verified against automated integration test schemas, multipart file upload validations, and synthetic test payloads.*
 
 ---
 
@@ -37,9 +38,9 @@
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
 | **Full Pytest Backend Suite** | `D:\careflow\.venv\Scripts\pytest.exe D:\careflow\tests` | **PASSED** | **91/91 passed** (Phase 1-5 suites + 7A/7B DB & config + 7C auth + 7D security + 7E/7F import engine lifecycle, RBAC, non-destructive ingestion, idempotency) |
-| **Full Vitest Frontend Suite** | `npm run test` (in `frontend/`) | **PASSED** | **43/43 passed** (All 11 test files passing: Landing, Overview, Facilities, FacilityDetail, Regions, Forecast, DataQuality, LoginPage, Button, Feedback, API) |
+| **Full Vitest Frontend Suite** | `npm run test` (in `frontend/`) | **PASSED** | **58/58 passed** (All 12 test files passing: Landing, Overview, Facilities, FacilityDetail, Regions, Forecast, DataQuality, ImportPage, LoginPage, Button, Feedback, API) |
 | **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React + TypeScript + Vite build succeeded with **0 errors** |
-| **Alembic Database Migration** | `alembic upgrade head` | **PASSED** | Migration `56a26ed15259` applied cleanly against database |
+| **Alembic Database Migration** | `alembic upgrade head` | **PASSED** | Migrations `56a26ed15259` and `e63cafcc4f9d` (`add_file_hash_to_import_jobs`) applied cleanly against database |
 
 ---
 
@@ -70,3 +71,25 @@
 5. **Automated Integration Tests & Documentation**:
    - `tests/test_phase_7ef_imports.py`: 14 comprehensive tests covering upload constraints, RBAC, missing/zero preservation, non-destructive overwriting, idempotency hashing, pagination, and error handling.
    - `docs/IMPORT_PIPELINE.md`: Complete pipeline architecture, data integrity policies, lifecycle states, and API specification.
+
+---
+
+## Phase 7G Deliverables (HMIS Import & Audit Workspace)
+
+1. **HMIS Import / Audit Workspace Page (`/imports`)**:
+   - `frontend/src/pages/ImportPage.tsx`: Primary ingestion workspace providing status telemetry, interactive upload controls, paginated import history, quality scorecard inspection, and diagnostic error log viewer.
+   - Accessible via `/imports` with client-side role authorization protecting upload actions.
+
+2. **Modular Workspace Components**:
+   - `frontend/src/components/imports/FileUploadZone.tsx`: Drag-and-drop / file selector with client-side validation (`.csv`, `.xlsx`, `.xls` <= 50MB) and visual restriction banners for `VIEWER` roles.
+   - `frontend/src/components/imports/ImportHistoryTable.tsx`: Tabular history viewer with status badges, pagination, search/filtering, and action buttons for quality inspection and error logs.
+   - `frontend/src/components/imports/ImportQualityModal.tsx`: Modal displaying the 13-point HMIS quality audit score, dimension breakdowns (completeness, validity, consistency, timeliness, accuracy), and findings.
+   - `frontend/src/components/imports/ImportErrorLogViewer.tsx`: Paginated diagnostic error viewer with severity badges (`CRITICAL`, `ERROR`, `WARNING`, `INFO`) and row/sheet localization.
+
+3. **Frontend API Client Integration**:
+   - `frontend/src/api/client.ts` & `frontend/src/api/types.ts`: Extended with `uploadImportFile`, `getImportJobs`, `getImportJob`, `getImportJobQuality`, and `getImportJobErrors` API methods and TypeScript interfaces.
+   - `frontend/src/api/client.test.ts`: Added tests verifying multipart upload and query param handling.
+
+4. **Database Schema & Migration Alignment**:
+   - `backend/app/db/migrations/versions/e63cafcc4f9d_add_file_hash_to_import_jobs.py`: Added `file_hash` (`VARCHAR(64)`, nullable) and index `ix_import_jobs_file_hash` to `import_jobs`.
+

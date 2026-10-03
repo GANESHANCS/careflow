@@ -12,7 +12,11 @@ import type {
   ModelMetrics,
   User,
   TokenResponse,
-  LoginPayload
+  LoginPayload,
+  ImportJob,
+  ImportJobListResponse,
+  ImportJobQualityResponse,
+  ImportErrorLogListResponse,
 } from './types';
 
 const API_BASE_URL = '/api';
@@ -46,8 +50,10 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getStoredToken();
 
+  const isFormData = typeof FormData !== 'undefined' && options?.body instanceof FormData;
+
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options?.headers as Record<string, string>),
   };
 
@@ -190,5 +196,52 @@ export const api = {
     if (targetIndicator) query.append('target_indicator', targetIndicator);
     const qStr = query.toString();
     return fetchJson<ModelMetrics[]>(`/model/metrics${qStr ? `?${qStr}` : ''}`);
+  },
+
+  // HMIS Data Ingestion & Import Workspace (Phase 7G)
+  uploadImportFile: (file: File): Promise<ImportJob> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return fetchJson<ImportJob>('/imports', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  getImports: (params?: {
+    skip?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }): Promise<ImportJobListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.skip !== undefined) query.append('skip', String(params.skip));
+    if (params?.limit !== undefined) query.append('limit', String(params.limit));
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    const qStr = query.toString();
+    return fetchJson<ImportJobListResponse>(`/imports${qStr ? `?${qStr}` : ''}`);
+  },
+
+  getImportDetail: (jobCode: string): Promise<ImportJob> => {
+    return fetchJson<ImportJob>(`/imports/${jobCode}`);
+  },
+
+  getImportQuality: (jobCode: string): Promise<ImportJobQualityResponse> => {
+    return fetchJson<ImportJobQualityResponse>(`/imports/${jobCode}/quality`);
+  },
+
+  getImportErrors: (
+    jobCode: string,
+    params?: {
+      skip?: number;
+      limit?: number;
+    }
+  ): Promise<ImportErrorLogListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.skip !== undefined) query.append('skip', String(params.skip));
+    if (params?.limit !== undefined) query.append('limit', String(params.limit));
+    const qStr = query.toString();
+    return fetchJson<ImportErrorLogListResponse>(`/imports/${jobCode}/errors${qStr ? `?${qStr}` : ''}`);
   }
 };

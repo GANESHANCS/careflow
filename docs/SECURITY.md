@@ -8,7 +8,7 @@
 ## 2. JWT Security & Expiry
 * Signed using HMAC-SHA256 (`HS256`).
 * Standard token expiry is set to 24 hours.
-* Expiry (`exp`) and active user checks are enforced across all operational endpoints (`/api/facilities`, `/api/indicators`, `/api/analytics`, `/api/forecast`, `/api/model`).
+* Expiry (`exp`) and active user checks are enforced across all operational endpoints (`/api/facilities`, `/api/indicators`, `/api/analytics`, `/api/forecast`, `/api/model`, `/api/imports`).
 
 ## 3. Login Abuse Protection & Rate Limiting
 * `POST /api/auth/login` is protected by an in-memory sliding window rate limiter.

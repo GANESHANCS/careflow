@@ -5,6 +5,7 @@ CAREFlow India is a production-grade healthcare analytics, workflow management, 
 ## Core Capabilities
 - **Operational Analytics**: Comprehensive facility and regional healthcare reporting.
 - **HMIS Data Pipeline**: Data ingestion, normalization, quality validation, and provenance tracking.
+- **HMIS Ingestion & Audit Workspace**: Authenticated drag-and-drop spreadsheet upload, live ingestion tracking, and 13-point data quality audit inspection.
 - **Service Forecasting**: Time-series demand forecasting for Outpatient Department (OPD) attendance, inpatient admissions, and institutional deliveries.
 - **Capacity Planning**: Operational intelligence insights for healthcare administrators, public health researchers, and government decision-makers.
 
@@ -44,4 +45,8 @@ Access the application UI at `http://localhost:5173`.
 ## Documentation
 - [Architecture Blueprint](docs/ARCHITECTURE.md)
 - [Development Guide](docs/DEVELOPMENT.md)
+- [HMIS Import Pipeline](docs/IMPORT_PIPELINE.md)
+- [API Architecture & Specification](docs/API.md)
+- [Authentication & RBAC](docs/AUTHENTICATION.md)
+- [Security & Governance](docs/SECURITY.md)
 - [Project Status & Verification](docs/PROJECT_STATUS.md)

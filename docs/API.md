@@ -25,6 +25,11 @@ This document specifies the CAREFlow REST API layer, authentication requirements
 | `/api/analytics/*` | `GET` | **Protected (Any Role)** | Executive summary, time-series trends, regional, and facility comparison analytics. |
 | `/api/forecast` | `GET` | **Protected (Any Role)** | Monthly demand forecasting engine and prediction intervals. |
 | `/api/model/metrics` | `GET` | **Protected (Any Role)** | Forecasting model registry benchmarks and MAE/RMSE evaluation metrics. |
+| `/api/imports` | `POST` | **Protected (ADMIN, ANALYST)** | Uploads spreadsheet dataset (`.csv`, `.xlsx`, `.xls`) to queue import job. |
+| `/api/imports` | `GET` | **Protected (Any Role)** | Paginated list of import jobs with status and search filters. |
+| `/api/imports/{job_code}` | `GET` | **Protected (Any Role)** | Retrieves import job execution details and status. |
+| `/api/imports/{job_code}/quality` | `GET` | **Protected (Any Role)** | Retrieves 13-point data quality scorecard for the import job. |
+| `/api/imports/{job_code}/errors` | `GET` | **Protected (Any Role)** | Retrieves paginated diagnostic error and audit logs. |
 
 ---
 

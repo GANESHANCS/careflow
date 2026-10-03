@@ -10,6 +10,7 @@ import { FacilityDetailPage } from '../pages/FacilityDetailPage';
 import { RegionsPage } from '../pages/RegionsPage';
 import { ForecastPage } from '../pages/ForecastPage';
 import { DataQualityPage } from '../pages/DataQualityPage';
+import { ImportPage } from '../pages/ImportPage';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -65,6 +66,14 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <DataQualityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="imports"
+          element={
+            <ProtectedRoute>
+              <ImportPage />
             </ProtectedRoute>
           }
         />

@@ -4,7 +4,7 @@
 
 The CAREFlow HMIS Data Ingestion Engine provides an auditable, secure, and production-hardened pipeline for uploading, validating, standardizing, and persisting government Health Management Information System (HMIS) spreadsheet reports (`.csv`, `.xlsx`, `.xls`).
 
-It bridges the raw file inspection, schema normalization, and data quality evaluation engines from Phase 2 with the operational relational database model and authenticated API endpoints introduced in Phase 7C/7D.
+It bridges the raw file inspection, schema normalization, and data quality evaluation engines from Phase 2 with the operational relational database model and authenticated API endpoints introduced in Phase 7C/7D. In Phase 7G, this pipeline is surfaced through the interactive `/imports` frontend workspace, providing drag-and-drop spreadsheet upload, live job history tracking, quality scorecard modal inspection, and diagnostic audit error viewing with role-based access control.
 
 ---
 

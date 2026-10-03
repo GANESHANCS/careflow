@@ -13,7 +13,7 @@ CAREFlow employs a stateless, token-based authentication architecture utilizing 
 * **Zero Plaintext Persistence**: Passwords are hashed using bcrypt with salt factor 12 before being written to the database.
 * **No Insecure Production Fallbacks**: `SECRET_KEY` must be configured via environment settings. Startup fails if default dev keys are detected in production.
 * **Public Landing Experience**: Public visitors can access `/` without authentication.
-* **Protected Terminal Workspaces**: Operational routes (`/overview`, `/facilities`, `/regions`, `/forecast`, `/data-quality`) require a valid Bearer token.
+* **Protected Terminal Workspaces**: Operational routes (`/overview`, `/facilities`, `/regions`, `/forecast`, `/data-quality`, `/imports`) require a valid Bearer token.
 
 ---
 
@@ -33,9 +33,9 @@ CAREFlow defines three operational user roles:
 
 | Role | Access Level | Description |
 | :--- | :--- | :--- |
-| **`ADMIN`** | Full System Access | Complete access to analytics, forecasting, data quality, user administration, and system configuration. |
-| **`ANALYST`** | Intelligence Access | Full access to overview, facility details, regional analytics, ML forecasting, and data quality dashboards. Cannot manage users. |
-| **`VIEWER`** | Read-Only Operational Access | Read-only access to operational intelligence dashboards. |
+| **`ADMIN`** | Full System Access | Complete access to analytics, forecasting, data quality, HMIS data imports/uploads, user administration, and system configuration. |
+| **`ANALYST`** | Intelligence Access | Full access to overview, facility details, regional analytics, ML forecasting, data quality, and HMIS file ingestion/uploads. Cannot manage users. |
+| **`VIEWER`** | Read-Only Operational Access | Read-only access to operational intelligence dashboards, import history, quality scorecards, and audit logs. File upload is restricted. |
 
 ---
 

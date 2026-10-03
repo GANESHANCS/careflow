@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { LayoutDashboard, Building2, Map, TrendingUp, ShieldCheck, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Building2, Map, TrendingUp, ShieldCheck, UploadCloud, HelpCircle } from 'lucide-react';
 import { Tooltip } from '../overlays/Tooltip';
 
 export const SlimRail: React.FC = () => {
@@ -13,6 +13,7 @@ export const SlimRail: React.FC = () => {
     { label: 'Regions', path: '/regions', icon: Map },
     { label: 'Forecast', path: '/forecast', icon: TrendingUp },
     { label: 'Data Quality', path: '/data-quality', icon: ShieldCheck },
+    { label: 'Imports', path: '/imports', icon: UploadCloud },
   ];
 
   return (
