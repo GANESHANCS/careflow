@@ -256,13 +256,17 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
           <CheckCircle2 className="w-5 h-5 text-[var(--emerald-600)] shrink-0 mt-0.5" />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-bold">Ingestion Successful</span>
+              <span className="font-bold">
+                {uploadSuccess.status === 'QUEUED' ? 'Dataset Queued for Processing' : 'Ingestion Successful'}
+              </span>
               <span className="font-mono text-xs px-2 py-0.5 rounded bg-white/80 border border-[var(--emerald-300)] text-[var(--emerald-800)]">
                 {uploadSuccess.job_code}
               </span>
             </div>
             <p className="mt-1 text-xs text-[var(--emerald-800)]">
-              Processed {uploadSuccess.records_imported} of {uploadSuccess.total_records} records with status <span className="font-semibold">{uploadSuccess.status}</span>.
+              {uploadSuccess.status === 'QUEUED'
+                ? 'Dataset queued in background worker. Live progress is being tracked below.'
+                : `Processed ${uploadSuccess.records_imported} of ${uploadSuccess.total_records} records with status ${uploadSuccess.status}.`}
               {uploadSuccess.quality_score !== null && ` Quality score: ${uploadSuccess.quality_score.toFixed(1)}%.`}
             </p>
           </div>

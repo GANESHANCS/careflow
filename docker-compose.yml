@@ -26,7 +26,7 @@ services:
     container_name: careflow_backend
     restart: always
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-careflow_user}:${POSTGRES_PASSWORD:-careflow_password}@postgres:5432/${POSTGRES_DB:-careflow_db}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-careflow_user}:${POSTGRES_PASSWORD:-careflow_password}@postgres:5432/${POSTGRES_DB:-careflow_db}
       - ENVIRONMENT=production
       - DEBUG=false
       - SECRET_KEY=${SECRET_KEY}

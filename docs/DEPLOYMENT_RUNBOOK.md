@@ -33,7 +33,7 @@ CAREFlow requires distinct configuration in `production` mode, enforced strictly
 | `ENVIRONMENT` | Runtime mode | Must be strictly `"production"` |
 | `DEBUG` | Verbose debug flag | Forced to `False` in production |
 | `SECRET_KEY` | Cryptographic JWT signing key | **Mandatory**: Random hex string $\ge 32$ chars. Never commit to Git! |
-| `DATABASE_URL` | SQLAlchemy PostgreSQL URI | `postgresql://user:password@host:5432/dbname` (SQLite strictly forbidden) |
+| `DATABASE_URL` | SQLAlchemy PostgreSQL URI | `postgresql+psycopg://user:password@host:5432/dbname` (SQLite strictly forbidden) |
 | `CORS_ORIGINS` | Permitted browser origins | JSON array of valid domains: `["https://careflow.gov.in"]` |
 | `LOG_LEVEL` | Logging threshold | `"INFO"` or `"WARNING"` |
 | `DB_POOL_SIZE` | Connection pool size | `10` to `20` |
@@ -73,7 +73,7 @@ SECRET_KEY="<your_generated_64_char_secret_key>"
 POSTGRES_USER=careflow_prod_user
 POSTGRES_PASSWORD="<strong_db_password>"
 POSTGRES_DB=careflow_prod_db
-DATABASE_URL=postgresql://careflow_prod_user:<strong_db_password>@postgres:5432/careflow_prod_db
+DATABASE_URL=postgresql+psycopg://careflow_prod_user:<strong_db_password>@postgres:5432/careflow_prod_db
 CORS_ORIGINS=["https://careflow.gov.in","http://localhost:80"]
 ```
 
@@ -138,19 +138,54 @@ server {
 
 ## 5. Database Provisioning & Admin Bootstrapping
 
-In production mode, automatic table creation and dev user seeding are disabled.
-1. Schema is initialized deterministically via Alembic migrations:
-   ```bash
-   docker compose exec backend alembic upgrade head
-   ```
-2. Core indicators are verified/seeded:
-   ```bash
-   docker compose exec backend python scripts/seed_indicators.py
-   ```
-3. Initial administrator credentials can be provisioned by setting environment variables during startup:
-   * `INITIAL_ADMIN_USERNAME=admin`
-   * `INITIAL_ADMIN_PASSWORD=<secure_initial_password>`
-   * `INITIAL_ADMIN_EMAIL=admin@careflow.gov.in`
+In production mode (`ENVIRONMENT="production"`), automatic schema generation and development account seeding are strictly disabled. The database is initialized deterministically via Alembic migrations, followed by explicit administrator bootstrapping.
+
+### 5.1 Initialize Schema via Migrations
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+### 5.2 Seed Core Indicator Registry
+```bash
+docker compose exec backend python scripts/seed_indicators.py
+```
+
+### 5.3 Bootstrap Initial Production Administrator
+CAREFlow provides an explicit, secure CLI command (`scripts/bootstrap_admin.py`) for creating the initial production administrator. To prevent accidental lockouts or predictable credentials, credentials must be supplied via environment variables or hidden interactive prompts.
+
+**Password Security Policy**:
+- Minimum 12 characters
+- At least one uppercase letter (`A-Z`)
+- At least one lowercase letter (`a-z`)
+- At least one numeric digit (`0-9`)
+- At least one special symbol (e.g. `!@#$%^&*`)
+
+#### Method A: Interactive Prompt (Recommended for Operators)
+Execute the script interactively inside the running backend container. Passwords are entered via hidden prompts and never echoed to the terminal or saved in shell history:
+```bash
+docker compose exec -it backend python scripts/bootstrap_admin.py --username admin --email admin@careflow.gov.in
+```
+
+#### Method B: Automated Deployment (Environment Variables)
+In continuous deployment or automated provisioning pipelines, pass credentials via ephemeral environment variables:
+```bash
+docker compose exec \
+  -e ADMIN_USERNAME="admin" \
+  -e ADMIN_PASSWORD="<your_secure_password_here>" \
+  -e ADMIN_EMAIL="admin@careflow.gov.in" \
+  backend python scripts/bootstrap_admin.py
+```
+
+### 5.4 Verification & Idempotency Guarantees
+- **Idempotency**: Running `scripts/bootstrap_admin.py` after an administrator account already exists will exit cleanly with status code `0` (`[NOTICE] Bootstrap skipped: Administrator account already exists. No modifications made.`). Existing passwords are never overwritten or reset.
+- **Login Verification**: Verify credentials against the authentication endpoint:
+  ```bash
+  curl -s -X POST http://localhost:8000/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username": "admin", "password": "<your_secure_password_here>"}' \
+    | grep -o '"access_token":'
+  ```
+  A successful response returns a signed JWT `access_token` and confirmed `ADMIN` role.
 
 ---
 

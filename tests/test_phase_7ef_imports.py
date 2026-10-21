@@ -1,4 +1,5 @@
 import io
+import time
 import pytest
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -9,6 +10,18 @@ from backend.app.db.models.import_error_log import ImportErrorLog
 from backend.app.db.models.observation import Observation
 from backend.app.db.models.facility import Facility
 from backend.app.services.imports.storage import ImportStorageService
+
+
+def wait_for_job(client: TestClient, job_code: str, headers: dict, timeout: float = 15.0) -> dict:
+    """Helper to poll until background import job reaches terminal status."""
+    start = time.time()
+    while time.time() - start < timeout:
+        res = client.get(f"/api/imports/{job_code}", headers=headers)
+        data = res.json()
+        if data.get("status") in ("COMPLETED", "COMPLETED_WITH_WARNINGS", "FAILED"):
+            return data
+        time.sleep(0.05)
+    return client.get(f"/api/imports/{job_code}", headers=headers).json()
 
 
 def create_synthetic_csv_bytes(include_missing=True) -> bytes:
@@ -73,11 +86,15 @@ def test_upload_valid_csv(client: TestClient, auth_headers: dict):
 
     assert data["job_code"].startswith("JOB_")
     assert data["original_filename"] == "test_hmis_data.csv"
-    assert data["status"] in ("COMPLETED", "COMPLETED_WITH_WARNINGS")
-    assert data["total_records"] >= 2
-    assert data["records_imported"] >= 1
-    assert data["quality_score"] is not None
+    assert data["status"] in ("QUEUED", "COMPLETED", "COMPLETED_WITH_WARNINGS")
     assert "X-Request-ID" in res.headers
+
+    # Verify background execution completed successfully
+    job_data = wait_for_job(client, data["job_code"], auth_headers)
+    assert job_data["status"] in ("COMPLETED", "COMPLETED_WITH_WARNINGS")
+    assert job_data["total_records"] >= 2
+    assert job_data["records_imported"] >= 1
+    assert job_data["quality_score"] is not None
 
 
 def test_upload_valid_xlsx(client: TestClient, admin_auth_headers: dict):
@@ -88,8 +105,11 @@ def test_upload_valid_xlsx(client: TestClient, admin_auth_headers: dict):
     assert res.status_code == 201
     data = res.json()
 
-    assert data["status"] in ("COMPLETED", "COMPLETED_WITH_WARNINGS")
+    assert data["status"] in ("QUEUED", "COMPLETED", "COMPLETED_WITH_WARNINGS")
     assert data["original_filename"] == "test_hmis_data.xlsx"
+
+    job_data = wait_for_job(client, data["job_code"], admin_auth_headers)
+    assert job_data["status"] in ("COMPLETED", "COMPLETED_WITH_WARNINGS")
 
 
 def test_upload_unsupported_file_extension(client: TestClient, auth_headers: dict):
@@ -185,6 +205,7 @@ def test_missing_and_zero_preservation(client: TestClient, db_session: Session, 
     csv_bytes = create_synthetic_csv_bytes(include_missing=True)
     res = client.post("/api/imports", files={"file": ("missing_test.csv", csv_bytes, "text/csv")}, headers=auth_headers)
     assert res.status_code == 201
+    wait_for_job(client, res.json()["job_code"], auth_headers)
 
     # Verify zero value preserved as 0.0 with ZERO/VALID classification
     zero_obs = db_session.query(Observation).filter(Observation.value == 0.0).first()
@@ -220,6 +241,7 @@ def test_existing_valid_observation_not_overwritten_by_missing(client: TestClien
     csv_bytes = create_synthetic_csv_bytes(include_missing=True)
     res = client.post("/api/imports", files={"file": ("overwrite_test.csv", csv_bytes, "text/csv")}, headers=auth_headers)
     assert res.status_code == 201
+    wait_for_job(client, res.json()["job_code"], auth_headers)
 
     db_session.refresh(obs)
     # The existing valid value (99.0) must NOT be overwritten with None!

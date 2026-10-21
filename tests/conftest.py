@@ -54,14 +54,16 @@ def db_session():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def override_get_db(db_session):
-    """Override FastAPI get_db dependency to use the isolated test database session."""
+def override_get_db(db_session, monkeypatch):
+    """Override FastAPI get_db dependency and SessionLocal to use the isolated test database session."""
     def _override():
         try:
             yield db_session
         finally:
             pass
 
+    monkeypatch.setattr("backend.app.db.session.SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr("backend.app.services.imports.worker.SessionLocal", TestingSessionLocal)
     app.dependency_overrides[get_db] = _override
     yield
     app.dependency_overrides.clear()

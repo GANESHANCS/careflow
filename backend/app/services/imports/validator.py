@@ -52,7 +52,7 @@ class ImportValidatorService:
             db.query(ImportJob)
             .filter(
                 ImportJob.file_hash == file_hash,
-                ImportJob.status.in_(["COMPLETED", "PROCESSING", "VALIDATED", "COMPLETED_WITH_WARNINGS"])
+                ImportJob.status.in_(["QUEUED", "PROCESSING", "VALIDATED", "COMPLETED", "COMPLETED_WITH_WARNINGS"])
             )
             .order_by(ImportJob.id.desc())
             .first()

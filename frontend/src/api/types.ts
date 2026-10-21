@@ -337,7 +337,9 @@ export type ImportJobStatus =
   | 'VALIDATED'
   | 'COMPLETED'
   | 'COMPLETED_WITH_WARNINGS'
-  | 'FAILED';
+  | 'FAILED'
+  | 'ROLLED_BACK'
+  | 'CANCELLED';
 
 export interface ImportJob {
   id: number;
@@ -348,12 +350,109 @@ export interface ImportJob {
   file_hash: string | null;
   status: ImportJobStatus | string;
   total_records: number;
+  processed_records?: number;
   records_imported: number;
   records_rejected: number;
   quality_score: number | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  claimed_at?: string | null;
+  claimed_by?: string | null;
+  heartbeat_at?: string | null;
+  retry_count?: number;
+  max_retries?: number;
+  error_summary?: string | null;
+  schema_profile?: string | null;
+  rolled_back_at?: string | null;
+  rolled_back_by?: string | null;
+  rollback_reason?: string | null;
+  progress_percent?: number | null;
+  batch_id?: number | null;
+}
+
+export type ImportBatchStatus =
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'PARTIALLY_FAILED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface ImportBatch {
+  id: number;
+  batch_code: string;
+  source: string;
+  status: ImportBatchStatus | string;
+  total_files: number;
+  processed_files: number;
+  successful_files: number;
+  failed_files: number;
+  total_records: number;
+  imported_records: number;
+  rejected_records: number;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+  initiated_by?: string | null;
+  error_summary?: string | null;
+  progress_percent?: number;
+}
+
+export interface ImportBatchDetail extends ImportBatch {
+  import_jobs: ImportJob[];
+}
+
+export interface ImportBatchListResponse {
+  total: number;
+  items: ImportBatch[];
+  page: number;
+  page_size: number;
+}
+
+export interface DirectoryScanTriggerResponse {
+  files_discovered: number;
+  jobs_created: number;
+  batch_code?: string | null;
+  message: string;
+}
+
+export interface ImportBatchRetryResponse {
+  batch_code: string;
+  status: string;
+  retried_jobs: number;
+  message: string;
+}
+
+export interface ImportJobProgressResponse {
+  job_code: string;
+  status: ImportJobStatus | string;
+  total_records: number;
+  processed_records: number;
+  records_imported: number;
+  records_rejected: number;
+  progress_percent: number;
+  heartbeat_at?: string | null;
+  error_summary?: string | null;
+  schema_profile?: string | null;
+}
+
+export interface ImportJobRetryResponse {
+  job_code: string;
+  status: string;
+  retry_count: number;
+  message: string;
+}
+
+export interface ImportRollbackResponse {
+  job_code: string;
+  status: string;
+  records_deleted: number;
+  records_restored: number;
+  records_unchanged: number;
+  rolled_back_at: string;
+  rolled_back_by?: string | null;
+  message: string;
 }
 
 export interface ImportJobListResponse {

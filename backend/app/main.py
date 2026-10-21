@@ -18,6 +18,8 @@ from backend.app.db.session import engine, SessionLocal
 from backend.app.db.models.base import Base
 from backend.app.db.seed import seed_standard_indicators, seed_initial_users
 
+from backend.app.services.imports.worker import start_in_process_worker, stop_in_process_worker
+
 # Initialize structured logging setup
 setup_logging()
 
@@ -33,7 +35,17 @@ async def lifespan(app: FastAPI):
             seed_initial_users(db)
         finally:
             db.close()
+
+    # Start background worker if enabled
+    worker_started = False
+    if settings.ENABLE_IMPORT_WORKER and settings.ENVIRONMENT.lower() != "testing":
+        start_in_process_worker()
+        worker_started = True
+
     yield
+
+    if worker_started:
+        stop_in_process_worker()
 
 
 app = FastAPI(

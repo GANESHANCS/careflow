@@ -13,6 +13,15 @@ vi.mock('../api/client', () => ({
     getImportDetail: vi.fn(),
     getImportQuality: vi.fn(),
     getImportErrors: vi.fn(),
+    rollbackImport: vi.fn(),
+    getImportJobStatus: vi.fn(),
+    retryImport: vi.fn(),
+    cancelImport: vi.fn(),
+    getImportBatches: vi.fn(),
+    getImportBatchDetail: vi.fn(),
+    triggerDirectoryScan: vi.fn(),
+    retryImportBatch: vi.fn(),
+    cancelImportBatch: vi.fn(),
   },
 }));
 
@@ -158,6 +167,53 @@ describe('ImportPage & Phase 7G Workspace', () => {
     (api.getImports as any).mockResolvedValue(mockListResponse);
     (api.getImportQuality as any).mockResolvedValue(mockQualityResponse);
     (api.getImportErrors as any).mockResolvedValue(mockErrorLogResponse);
+    (api.getImportBatches as any).mockResolvedValue({
+      total: 1,
+      items: [
+        {
+          id: 1,
+          batch_code: 'BATCH_TEST_001',
+          source: 'DIRECTORY_WATCHER',
+          status: 'COMPLETED',
+          total_files: 2,
+          processed_files: 2,
+          successful_files: 2,
+          failed_files: 0,
+          total_records: 100,
+          imported_records: 100,
+          rejected_records: 0,
+          created_at: '2026-10-21T10:00:00Z',
+          updated_at: '2026-10-21T10:01:00Z',
+          completed_at: '2026-10-21T10:01:00Z',
+          progress_percent: 100,
+        },
+      ],
+      page: 1,
+      page_size: 50,
+    });
+    (api.getImportBatchDetail as any).mockResolvedValue({
+      id: 1,
+      batch_code: 'BATCH_TEST_001',
+      source: 'DIRECTORY_WATCHER',
+      status: 'COMPLETED',
+      total_files: 1,
+      processed_files: 1,
+      successful_files: 1,
+      failed_files: 0,
+      total_records: 50,
+      imported_records: 50,
+      rejected_records: 0,
+      created_at: '2026-10-21T10:00:00Z',
+      updated_at: '2026-10-21T10:01:00Z',
+      progress_percent: 100,
+      import_jobs: [mockJobs[0]],
+    });
+    (api.triggerDirectoryScan as any).mockResolvedValue({
+      files_discovered: 2,
+      jobs_created: 2,
+      batch_code: 'BATCH_NEW_002',
+      message: 'Directory scan completed: 2 file(s) evaluated, 2 job(s) created.',
+    });
   });
 
   // 1. Render check
@@ -443,6 +499,300 @@ describe('ImportPage & Phase 7G Workspace', () => {
     await waitFor(() => {
       expect(screen.getByText('Unable to Retrieve Import History')).toBeInTheDocument();
       expect(screen.getByText('Internal network outage')).toBeInTheDocument();
+    });
+  });
+
+  // 13. Safe Rollback integration tests (Phase 8.2)
+  it('shows Rollback action button for ADMIN role on completed jobs and hides it for non-admin', async () => {
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, username: 'admin', role: 'ADMIN' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('mohfw_delhi_2024.csv')).toBeInTheDocument();
+    });
+
+    // Admin should see Rollback button for completed jobs
+    const rollbackButtons = screen.getAllByRole('button', { name: /Rollback/i });
+    expect(rollbackButtons.length).toBeGreaterThan(0);
+
+    unmount();
+
+    // Re-render as ANALYST
+    (useAuth as any).mockReturnValue({
+      user: { id: 2, username: 'analyst', role: 'ANALYST' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('mohfw_delhi_2024.csv')).toBeInTheDocument();
+    });
+
+    // Analyst should NOT see Rollback button
+    expect(screen.queryByRole('button', { name: /Rollback/i })).not.toBeInTheDocument();
+  });
+
+  it('opens confirmation modal and executes rollbackImport successfully on confirm', async () => {
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, username: 'admin', role: 'ADMIN' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    (api.rollbackImport as any).mockResolvedValueOnce({
+      job_code: 'JOB_20261003_100000_111111',
+      status: 'ROLLED_BACK',
+      records_deleted: 500,
+      records_restored: 0,
+      records_unchanged: 0,
+      rolled_back_at: '2026-10-10T12:00:00Z',
+      rolled_back_by: 'admin',
+      message: 'Successfully rolled back import job.',
+    });
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('mohfw_delhi_2024.csv')).toBeInTheDocument();
+    });
+
+    const rollbackButtons = screen.getAllByRole('button', { name: /Rollback/i });
+    fireEvent.click(rollbackButtons[0]);
+
+    // Confirmation modal should be visible
+    expect(screen.getByText('Roll Back HMIS Import Dataset')).toBeInTheDocument();
+    expect(screen.getByText(/Important: This operation modifies database records/i)).toBeInTheDocument();
+
+    // Type optional reason
+    const reasonInput = screen.getByPlaceholderText(/Ingested incorrect facility reporting month/i);
+    fireEvent.change(reasonInput, { target: { value: 'Erroneous reporting period' } });
+
+    // Click confirm
+    const confirmBtn = screen.getByRole('button', { name: /Confirm Rollback/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(api.rollbackImport).toHaveBeenCalledWith('JOB_20261003_100000_111111', 'Erroneous reporting period');
+      expect(api.getImports).toHaveBeenCalledTimes(2); // Initial load + refresh after rollback
+    });
+  });
+
+  it('displays conflict error message in modal when subsequent imports depend on target job', async () => {
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, username: 'admin', role: 'ADMIN' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    const conflictErr = new Error('Cannot roll back import job because subsequent active import job(s) [JOB_LATER] modified the same observation(s). Roll back subsequent dependent imports first.');
+    (conflictErr as any).status = 409;
+    (api.rollbackImport as any).mockRejectedValueOnce(conflictErr);
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('mohfw_delhi_2024.csv')).toBeInTheDocument();
+    });
+
+    const rollbackButtons = screen.getAllByRole('button', { name: /Rollback/i });
+    fireEvent.click(rollbackButtons[0]);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm Rollback/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot Roll Back: Dependent Imports Detected')).toBeInTheDocument();
+      expect(screen.getByText(/To preserve continuous data provenance/i)).toBeInTheDocument();
+    });
+  });
+
+  // 14. Phase 9A Active Ingestion Progress Banner & Retries
+  it('displays active batch progress banner when a job is PROCESSING or QUEUED', async () => {
+    const processingJob: ImportJob = {
+      id: 99,
+      job_code: 'JOB_ACTIVE_PROC',
+      original_filename: 'live_batch.csv',
+      file_size_bytes: 8192,
+      mime_type: 'text/csv',
+      file_hash: 'hash_live',
+      status: 'PROCESSING',
+      total_records: 1000,
+      processed_records: 450,
+      records_imported: 440,
+      records_rejected: 10,
+      progress_percent: 45.0,
+      schema_profile: 'mohfw_standard_v2',
+      quality_score: null,
+      created_at: '2026-10-20T10:00:00Z',
+      updated_at: '2026-10-20T10:00:02Z',
+      completed_at: null,
+    };
+
+    (api.getImports as any).mockResolvedValue({
+      total: 1,
+      items: [processingJob],
+      page: 1,
+      page_size: 10,
+    });
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Batch Ingestion in Progress')).toBeInTheDocument();
+      expect(screen.getAllByText('JOB_ACTIVE_PROC').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('mohfw_standard_v2')).toBeInTheDocument();
+    });
+  });
+
+  it('renders Retry button on FAILED jobs for ADMIN and calls api.retryImport on click', async () => {
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, username: 'admin', role: 'ADMIN' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    (api.retryImport as any).mockResolvedValueOnce({
+      job_code: 'JOB_20261003_120000_333333',
+      status: 'QUEUED',
+      retry_count: 1,
+      message: 'Job re-queued successfully.',
+    });
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('corrupted_format.csv')).toBeInTheDocument();
+    });
+
+    const retryBtn = screen.getByRole('button', { name: /Retry/i });
+    expect(retryBtn).toBeInTheDocument();
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(api.retryImport).toHaveBeenCalledWith('JOB_20261003_120000_333333');
+    });
+  });
+
+  it('shows queued feedback when an uploaded file returns QUEUED status', async () => {
+    const queuedJob: ImportJob = {
+      id: 5,
+      job_code: 'JOB_ASYNC_QUEUED',
+      original_filename: 'async_batch.csv',
+      file_size_bytes: 2048,
+      mime_type: 'text/csv',
+      file_hash: 'hash_q',
+      status: 'QUEUED',
+      total_records: 0,
+      records_imported: 0,
+      records_rejected: 0,
+      quality_score: null,
+      created_at: '2026-10-20T10:00:00Z',
+      updated_at: '2026-10-20T10:00:00Z',
+      completed_at: null,
+    };
+    (api.uploadImportFile as any).mockResolvedValueOnce(queuedJob);
+
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByTestId('hmis-file-input');
+    const validFile = new File(['header1,header2\n1,2'], 'async_batch.csv', { type: 'text/csv' });
+
+    fireEvent.change(input, { target: { files: [validFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('async_batch.csv')).toBeInTheDocument();
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /Begin Ingestion/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.uploadImportFile).toHaveBeenCalledWith(validFile);
+      expect(screen.getByText('Dataset Queued for Processing')).toBeInTheDocument();
+      expect(screen.getByText('JOB_ASYNC_QUEUED')).toBeInTheDocument();
+    });
+  });
+
+  it('switches between individual jobs tab and automated batches tab', async () => {
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    // Initial state shows individual jobs table
+    expect(screen.getByTestId('tab-individual-jobs')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-automated-batches')).toBeInTheDocument();
+
+    // Click automated batches tab
+    fireEvent.click(screen.getByTestId('tab-automated-batches'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Automated Batch Ingestion & Incoming Directory')).toBeInTheDocument();
+      expect(screen.getByText('BATCH_TEST_001')).toBeInTheDocument();
+    });
+
+    // Switch back to individual jobs
+    fireEvent.click(screen.getByTestId('tab-individual-jobs'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Ingestion History & Audit Registry')).toBeInTheDocument();
+    });
+  });
+
+  it('triggers on-demand directory scan from batch panel', async () => {
+    render(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByTestId('tab-automated-batches'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('scan-incoming-directory-btn')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('scan-incoming-directory-btn'));
+
+    await waitFor(() => {
+      expect(api.triggerDirectoryScan).toHaveBeenCalled();
+      expect(screen.getByText(/Directory scan completed/i)).toBeInTheDocument();
     });
   });
 });

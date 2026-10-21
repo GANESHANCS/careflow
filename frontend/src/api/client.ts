@@ -17,6 +17,14 @@ import type {
   ImportJobListResponse,
   ImportJobQualityResponse,
   ImportErrorLogListResponse,
+  ImportRollbackResponse,
+  ImportJobProgressResponse,
+  ImportJobRetryResponse,
+  ImportBatch,
+  ImportBatchDetail,
+  ImportBatchListResponse,
+  DirectoryScanTriggerResponse,
+  ImportBatchRetryResponse,
 } from './types';
 
 const API_BASE_URL = '/api';
@@ -261,5 +269,73 @@ export const api = {
     if (params?.limit !== undefined) query.append('limit', String(params.limit));
     const qStr = query.toString();
     return fetchJson<ImportErrorLogListResponse>(`/imports/${jobCode}/errors${qStr ? `?${qStr}` : ''}`);
-  }
+  },
+
+  rollbackImport: (jobCode: string, reason?: string): Promise<ImportRollbackResponse> => {
+    return fetchJson<ImportRollbackResponse>(`/imports/${jobCode}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  },
+
+  getImportJobStatus: (jobCode: string): Promise<ImportJobProgressResponse> => {
+    return fetchJson<ImportJobProgressResponse>(`/imports/${jobCode}/status`);
+  },
+
+  retryImport: (jobCode: string): Promise<ImportJobRetryResponse> => {
+    return fetchJson<ImportJobRetryResponse>(`/imports/${jobCode}/retry`, {
+      method: 'POST',
+    });
+  },
+
+  cancelImport: (jobCode: string): Promise<{ job_code: string; status: string; message: string }> => {
+    return fetchJson<{ job_code: string; status: string; message: string }>(`/imports/${jobCode}/cancel`, {
+      method: 'POST',
+    });
+  },
+
+  // Batch Monitoring & Directory Orchestration (Phase 9B)
+  getImportBatches: (params?: {
+    skip?: number;
+    limit?: number;
+    status?: string;
+    source?: string;
+  }): Promise<ImportBatchListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.skip !== undefined) query.append('skip', String(params.skip));
+    if (params?.limit !== undefined) query.append('limit', String(params.limit));
+    if (params?.status) query.append('status', params.status);
+    if (params?.source) query.append('source', params.source);
+    const qStr = query.toString();
+    return fetchJson<ImportBatchListResponse>(`/imports/batches${qStr ? `?${qStr}` : ''}`);
+  },
+
+  getImportBatchDetail: (batchCode: string): Promise<ImportBatchDetail> => {
+    return fetchJson<ImportBatchDetail>(`/imports/batches/${batchCode}`);
+  },
+
+  triggerDirectoryScan: (): Promise<DirectoryScanTriggerResponse> => {
+    return fetchJson<DirectoryScanTriggerResponse>('/imports/batches/scan', {
+      method: 'POST',
+    });
+  },
+
+  retryImportBatch: (batchCode: string): Promise<ImportBatchRetryResponse> => {
+    return fetchJson<ImportBatchRetryResponse>(`/imports/batches/${batchCode}/retry`, {
+      method: 'POST',
+    });
+  },
+
+  cancelImportBatch: (batchCode: string, reason?: string): Promise<ImportBatch> => {
+    return fetchJson<ImportBatch>(`/imports/batches/${batchCode}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  },
 };

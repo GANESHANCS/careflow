@@ -46,3 +46,41 @@ def test_valid_production_config():
     assert config.ENVIRONMENT == "production"
     assert config.DEBUG is False
     assert config.SECRET_KEY == valid_secure_secret
+    # Ensures postgresql:// was normalized to postgresql+psycopg://
+    assert config.DATABASE_URL == "postgresql+psycopg://user:pass@localhost:5432/careflow_prod"
+
+
+def test_database_url_normalization_with_psycopg_v3():
+    from backend.app.core.config import normalize_database_url
+
+    # postgresql:// -> postgresql+psycopg://
+    assert (
+        normalize_database_url("postgresql://careflow:secret@localhost:5432/careflow_db")
+        == "postgresql+psycopg://careflow:secret@localhost:5432/careflow_db"
+    )
+    # postgres:// -> postgresql+psycopg://
+    assert (
+        normalize_database_url("postgres://careflow:secret@localhost:5432/careflow_db")
+        == "postgresql+psycopg://careflow:secret@localhost:5432/careflow_db"
+    )
+    # already postgresql+psycopg:// -> unchanged
+    assert (
+        normalize_database_url("postgresql+psycopg://careflow:secret@localhost:5432/careflow_db")
+        == "postgresql+psycopg://careflow:secret@localhost:5432/careflow_db"
+    )
+    # sqlite URLs remain unchanged
+    assert normalize_database_url("sqlite:///./careflow_dev.db") == "sqlite:///./careflow_dev.db"
+    assert normalize_database_url("sqlite:///:memory:") == "sqlite:///:memory:"
+
+
+def test_postgresql_engine_construction_without_live_server():
+    from sqlalchemy import create_engine
+    from backend.app.core.config import normalize_database_url
+
+    normalized_url = normalize_database_url("postgresql://careflow_user:mock_pass@localhost:5432/careflow_db")
+    engine = create_engine(normalized_url)
+
+    # Verifies that dialect resolves to PostgreSQL with psycopg v3 driver
+    assert engine.dialect.name == "postgresql"
+    assert engine.dialect.driver == "psycopg"
+    assert "psycopg" in engine.dialect.dbapi.__name__

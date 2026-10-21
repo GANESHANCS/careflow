@@ -7,7 +7,9 @@ from backend.app.db.models.model_metadata import ModelMetadata
 from backend.app.db.models.data_quality import DataQualityLog
 from backend.app.db.models.user import User
 from backend.app.db.models.import_job import ImportJob
+from backend.app.db.models.import_batch import ImportBatch
 from backend.app.db.models.import_error_log import ImportErrorLog
+from backend.app.db.models.import_observation_record import ImportObservationRecord
 
 __all__ = [
     "Base",
@@ -20,5 +22,7 @@ __all__ = [
     "DataQualityLog",
     "User",
     "ImportJob",
-    "ImportErrorLog"
+    "ImportBatch",
+    "ImportErrorLog",
+    "ImportObservationRecord"
 ]

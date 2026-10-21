@@ -14,8 +14,12 @@ import {
   ChevronRight,
   Database,
   Loader2,
+  RotateCcw,
+  RotateCw,
+  XCircle,
 } from 'lucide-react';
 import type { ImportJob, ImportJobStatus } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
 import { Button } from '../buttons/Button';
 import { LoadingState } from '../feedback/LoadingState';
 import { ErrorState } from '../feedback/ErrorState';
@@ -35,6 +39,9 @@ export interface ImportHistoryTableProps {
   onRefresh: () => void;
   onInspectQuality: (job: ImportJob) => void;
   onViewErrors: (job: ImportJob) => void;
+  onRollback?: (job: ImportJob) => void;
+  onRetry?: (job: ImportJob) => void;
+  userRole?: string;
   className?: string;
 }
 
@@ -53,8 +60,14 @@ export const ImportHistoryTable: React.FC<ImportHistoryTableProps> = ({
   onRefresh,
   onInspectQuality,
   onViewErrors,
+  onRollback,
+  onRetry,
+  userRole,
   className,
 }) => {
+  const { user } = useAuth();
+  const currentRole = userRole || user?.role;
+  const isAdmin = currentRole?.toUpperCase() === 'ADMIN';
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const formatTimestamp = (isoString?: string | null) => {
@@ -112,6 +125,20 @@ export const ImportHistoryTable: React.FC<ImportHistoryTableProps> = ({
             QUEUED
           </span>
         );
+      case 'ROLLED_BACK':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+            <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
+            ROLLED_BACK
+          </span>
+        );
+      case 'CANCELLED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+            <XCircle className="w-3.5 h-3.5 text-gray-500" />
+            CANCELLED
+          </span>
+        );
       case 'FAILED':
       default:
         return (
@@ -159,9 +186,11 @@ export const ImportHistoryTable: React.FC<ImportHistoryTableProps> = ({
             <option value="ALL">All Statuses</option>
             <option value="COMPLETED">Completed</option>
             <option value="COMPLETED_WITH_WARNINGS">With Warnings</option>
+            <option value="ROLLED_BACK">Rolled Back</option>
             <option value="PROCESSING">Processing</option>
             <option value="QUEUED">Queued</option>
             <option value="FAILED">Failed</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
 
           {/* Refresh Button */}
@@ -261,10 +290,33 @@ export const ImportHistoryTable: React.FC<ImportHistoryTableProps> = ({
                       {getStatusBadge(job.status)}
                     </td>
                     <td className="py-3.5 px-4 text-right font-mono text-[var(--text-secondary)] whitespace-nowrap">
-                      <span className="font-semibold text-[var(--text-primary)]">
-                        {job.records_imported.toLocaleString()}
-                      </span>
-                      <span className="text-[var(--text-muted)]"> / {job.total_records.toLocaleString()}</span>
+                      {job.status === 'PROCESSING' ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <div>
+                            <span className="font-semibold text-[var(--teal-700)]">
+                              {(job.processed_records ?? job.records_imported).toLocaleString()}
+                            </span>
+                            <span className="text-[var(--text-muted)]"> / {job.total_records.toLocaleString()}</span>
+                          </div>
+                          <div className="w-24 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-[var(--teal-600)] h-1.5 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${Math.min(100, Math.max(5, job.progress_percent ?? (job.total_records > 0 ? Math.round(((job.processed_records || 0) / job.total_records) * 100) : 0)))}%`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : job.status === 'QUEUED' ? (
+                        <span className="text-slate-400 italic text-[11px]">Queued...</span>
+                      ) : (
+                        <>
+                          <span className="font-semibold text-[var(--text-primary)]">
+                            {job.records_imported.toLocaleString()}
+                          </span>
+                          <span className="text-[var(--text-muted)]"> / {job.total_records.toLocaleString()}</span>
+                        </>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
                       {job.quality_score !== null && job.quality_score !== undefined ? (
@@ -304,6 +356,39 @@ export const ImportHistoryTable: React.FC<ImportHistoryTableProps> = ({
                         >
                           Logs
                         </Button>
+                        {isAdmin && onRetry && job.status === 'FAILED' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRetry(job)}
+                            title="Retry Failed Import Job"
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            leftIcon={<RotateCw className="w-3.5 h-3.5 text-amber-500" />}
+                          >
+                            Retry
+                          </Button>
+                        )}
+                        {isAdmin && onRollback && (job.status === 'COMPLETED' || job.status === 'COMPLETED_WITH_WARNINGS') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRollback(job)}
+                            title="Roll Back Dataset Changes"
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            leftIcon={<RotateCcw className="w-3.5 h-3.5 text-rose-500" />}
+                          >
+                            Rollback
+                          </Button>
+                        )}
+                        {job.status === 'ROLLED_BACK' && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] font-mono text-[var(--text-muted)] italic px-2 py-1"
+                            title={job.rolled_back_by ? `Rolled back by ${job.rolled_back_by}` : undefined}
+                          >
+                            <RotateCcw className="w-3 h-3 opacity-60" />
+                            Rolled Back
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -6,6 +6,7 @@ from backend.app.db.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from backend.app.db.models.facility import Facility
     from backend.app.db.models.indicator import Indicator
+    from backend.app.db.models.import_job import ImportJob
 
 
 class Observation(Base, TimestampMixin):
@@ -31,10 +32,14 @@ class Observation(Base, TimestampMixin):
     source_row: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ingested_at: Mapped[str] = mapped_column(String(64), nullable=False)
     transformation_version: Mapped[str] = mapped_column(String(32), default="2.0.0", nullable=False)
+    last_import_job_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("import_jobs.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
     # Relationships
     facility: Mapped["Facility"] = relationship("Facility", back_populates="observations")
     indicator: Mapped["Indicator"] = relationship("Indicator", back_populates="observations")
+    import_job: Mapped[Optional["ImportJob"]] = relationship("ImportJob")
 
     __table_args__ = (
         UniqueConstraint("facility_id", "indicator_id", "observation_date", name="uq_facility_indicator_date"),

@@ -1,9 +1,25 @@
 import os
-from typing import List, Union
+from typing import List, Union, Any
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_DEV_SECRET = "dev_secret_key_change_in_production_1234567890"
+
+
+def normalize_database_url(url: str) -> str:
+    """
+    Normalizes standard PostgreSQL URL schemes (postgresql:// and postgres://)
+    to explicitly use the psycopg v3 driver (postgresql+psycopg://).
+    Leaves SQLite and explicitly specified driver schemes untouched.
+    """
+    if not url:
+        return url
+    trimmed = url.strip()
+    if trimmed.startswith("postgres://"):
+        return "postgresql+psycopg://" + trimmed[len("postgres://"):]
+    elif trimmed.startswith("postgresql://"):
+        return "postgresql+psycopg://" + trimmed[len("postgresql://"):]
+    return trimmed
 
 
 class Settings(BaseSettings):
@@ -34,6 +50,23 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_RECYCLE: int = 1800
+
+    # Phase 9A Asynchronous Batch Ingestion & Worker Settings
+    IMPORT_CHUNK_SIZE: int = 500
+    ENABLE_IMPORT_WORKER: bool = True
+    WORKER_POLL_INTERVAL: float = 2.0
+    WORKER_STALE_TIMEOUT_SECONDS: int = 300
+    WORKER_MAX_RETRIES: int = 3
+    ASYNC_IMPORT_DEFAULT: bool = False
+    ENABLE_DIRECTORY_WATCHER: bool = False
+    INCOMING_IMPORT_DIR: str = "data/incoming"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_database_url(cls, v: Union[str, Any]) -> str:
+        if isinstance(v, str):
+            return normalize_database_url(v)
+        return v
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

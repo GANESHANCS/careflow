@@ -80,6 +80,7 @@ def test_health_endpoint_public_safety(client: TestClient):
     res_str = res.text
     assert "sqlite:///" not in res_str
     assert "postgresql://" not in res_str
+    assert "postgresql+psycopg://" not in res_str
     assert "password" not in res_str.lower()
 
 
