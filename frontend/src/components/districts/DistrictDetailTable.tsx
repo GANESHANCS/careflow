@@ -136,7 +136,7 @@ export const DistrictDetailTable: React.FC<DistrictDetailTableProps> = ({
                       #{obs.source_row ?? 'N/A'}
                     </td>
                     <td className="py-2.5 px-3 text-[11px] text-[var(--text-muted)] font-mono truncate max-w-xs" title={obs.source_file ?? ''}>
-                      {obs.source_file ? obs.source_file.split(/[\/\\]/).pop() : 'N/A'}
+                      {obs.source_file ? obs.source_file.split(/[/\\]/).pop() : 'N/A'}
                       {obs.last_import_job_id ? ` [Job #${obs.last_import_job_id}]` : ''}
                     </td>
                   </tr>

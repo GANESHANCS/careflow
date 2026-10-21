@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 16 — PRODUCTION READINESS, SECURITY HARDENING & OPERATIONAL RELIABILITY (COMPLETE & VERIFIED)
+## Current Phase: PHASE 17 — END-TO-END INTEGRATION, CLINICAL DATA VALIDATION & DEMONSTRATION READINESS (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -37,6 +37,7 @@
 - **PHASE 14 (Healthcare Intelligence, Forecasting Foundation & Early-Warning Analytics)**: Complete & Verified.
 - **PHASE 15 (Multi-Year HMIS Data Integration & Anomaly Review Workflow)**: Complete & Verified.
 - **PHASE 16 (Production Readiness, Security Hardening & Operational Reliability)**: Complete & Verified.
+- **PHASE 17 (End-to-End Integration, Clinical Data Validation & Demonstration Readiness)**: Complete & Verified.
 
 ---
 
@@ -51,11 +52,14 @@
 
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
-| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **228/228 passed** (Phases 1–16 full suites passing without failures, 10 new Phase 16 tests) |
-| **Full Vitest Frontend Suite** | `npm test -- --run` (in `frontend/`) | **PASSED** | **79/79 passed** (All 14 test files passing across Landing, Overview, Facilities, Forecast, Imports, and Districts intelligence tabs) |
-| **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React 19 + TypeScript + Vite build succeeded with **0 errors, 0 warnings** |
-| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 15 tables (175,872 district_observations, 362 observations) |
+| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **246/246 passed** (Phases 1–17 full suites passing without failures, 18 new Phase 17 end-to-end integration tests) |
+| **Full Vitest Frontend Suite** | `npm test -- --run` (in `frontend/`) | **PASSED** | **81/81 passed** (All 14 test files passing across Landing, Overview, Facilities, Forecast, Imports, and Districts intelligence tabs) |
+| **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React 19 + TypeScript + Vite build succeeded with **0 errors, 0 warnings** (752ms) |
+| **Frontend Static Linter** | `npm run lint` (in `frontend/`) | **PASSED** | Oxlint succeeded with **0 errors** (fixed conditional hook in `DistrictComparisonChart.tsx` and regex escape) |
+| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 15 tables (175,872 district_observations, 362 observations, 108 forecasts) |
+| **Alembic Migration Head** | `python -m alembic current` | **PASSED** | Current migration head verified at `d3e4f5a6b7c8 (head)` |
 | **Git Diff Format & Hygiene** | `git diff --check` | **PASSED** | Exit code 0 (zero trailing whitespace, zero formatting anomalies) |
+
 
 ---
 
@@ -327,3 +331,39 @@
 6. **Operational Documentation & Runbooks (Phase 16F)**:
    * `docs/DEPLOYMENT_RUNBOOK.md`: Added Section 8 (Database Architecture & Canonical Path Selection), Section 9 (Backup Verification & Integrity Audit Procedures), and Section 10 (HMIS Import Recovery & Operational Troubleshooting).
    * Zero secret values, credentials, or private environmental keys committed.
+
+---
+
+## Phase 17 Deliverables (End-to-End Integration, Clinical Data Validation & Demonstration Readiness)
+
+1. **Frontend React Rule-of-Hooks Fix & Linter Zero-Error Cleanliness**:
+   * `frontend/src/components/districts/DistrictComparisonChart.tsx`: Corrected React Hook order by moving `useMemo` computation unconditionally before conditional loading and empty-state returns, eliminating a critical runtime violation of React Rules of Hooks.
+   * `frontend/src/components/districts/DistrictDetailTable.tsx`: Neutralized redundant regex forward-slash escape (`/[/\\]/`), ensuring clean static analysis.
+   * `frontend/src/pages/DistrictsPage.tsx`: Corrected total revenue districts fallback count to `32` (Tamil Nadu official count) and enhanced error/loading fallback presentation.
+   * `npm run lint` (Oxlint): Verified **0 errors** across all 113 source files.
+
+2. **End-to-End Integration Test Suite (`tests/test_phase_17_e2e_integration.py`)**:
+   * Implemented 18 comprehensive integration tests covering:
+     * **Full Authentication & Session Lifecycle**: Valid login across all three roles (`ADMIN`, `ANALYST`, `VIEWER`), invalid credentials rejection, inactive account blocking, expired token handling (401), and unauthenticated access protection.
+     * **RBAC Matrix Enforcement**: Uploads restricted to `ADMIN`/`ANALYST` (403 for `VIEWER`); rollbacks strictly restricted to `ADMIN` (403 for `ANALYST`/`VIEWER`); anomaly review actions restricted to `ADMIN`/`ANALYST` (403 for `VIEWER`).
+     * **Clinical Indicator Registry & Ambiguity Quarantine**: Validates verified clinical crosswalks (`1.1`, `2.2`, `14.12.1`) while asserting that ambiguous indicators (such as `14.10.1.c`) are quarantined and rejected by the Healthcare Intelligence engine with `IneligibleIndicatorError` (HTTP 400).
+     * **Data Integrity (Zero vs. Missing & Stock Metrics)**: Asserts exact distinction between numeric zero (`0.0` with `value_type="ZERO"`) and missing values (`None` with `value_type="MISSING"`), financial year filtering, and non-additive stock metric labeling (`14.01`).
+     * **Cross-District Comparison Summaries**: Verifies state mean, median, total calculations, and rank assignment excluding missing values.
+     * **CSV Export Governance & OWASP Formula-Injection Sanitization**: Verifies RFC 4180 streaming responses, provenance comments, and prepending single quote `'` to neutralize `=`, `+`, `-`, `@`, `\t`, `\r` prefixes.
+     * **Anomaly Review State Machine**: Tests complete transition cycle `OPEN` $\rightarrow$ `ACKNOWLEDGED` $\rightarrow$ `UNDER_REVIEW` $\rightarrow$ `RESOLVED` $\rightarrow$ `REOPENED` $\rightarrow$ `ADD_NOTE` and rejection of invalid status transitions.
+     * **HMIS Ingestion Validation & Idempotency**: Asserts file extension constraints and SHA-256 duplicate detection returning existing completed job.
+     * **System Health Probes**: High-frequency liveness (`/api/healthz`), readiness (`/api/readyz`), and health (`/api/health`).
+
+3. **Frontend Integration Tests & Error State Verification**:
+   * `frontend/src/pages/DistrictsPage.test.tsx`: Added tests verifying `District Analytics Catalog Offline` error state with retry action upon network failure and empty comparison state rendering when no records exist.
+   * `npm test -- --run`: Verified **81/81 passed** across 14 test suites.
+   * `npm run build`: Production bundle generated cleanly with **0 errors, 0 warnings** in 752ms.
+
+4. **Faculty Demonstration Checklist & Clean-Terminal Runbook**:
+   * `docs/FACULTY_DEMONSTRATION_CHECKLIST.md`: Structured 10-stage evaluation protocol guiding evaluators through health probes, RBAC, district trends, data integrity, cross-district comparisons, formula-injection sanitization, clinical indicator ambiguity, ML forecasting readiness, anomaly review workflows, and safe rollback.
+   * `docs/DEPLOYMENT_RUNBOOK.md`: Added Section 11 detailing clean-terminal startup procedures for backend (`uvicorn`) and frontend (`vite`), pre-seeded test accounts, and explicit clinical stream isolation.
+
+5. **Database Preservation & Integrity Audit**:
+   * Verified active SQLite database `careflow_dev.db` with `PRAGMA integrity_check` = `ok`.
+   * Record counts strictly preserved: **175,872 official district observations**, **362 facility observations**, **108 forecasts**, **351,764 rollback records**, **9 facilities**, **6 indicators**, **3 users**, Alembic migration head `d3e4f5a6b7c8`.
+   * Verified atomic backup `careflow_dev.db.bak_phase17` with matching SHA-256 hash `A05CD91AC5A97BDBA36CE3BF3AE4711D73B2BD6336BA12EFC024393ADFACBCBD`.

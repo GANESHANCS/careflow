@@ -558,4 +558,55 @@ describe('DistrictsPage Component (Phases 11E–12E)', () => {
     expect(screen.getByText(/HISTORICAL OUTLIER MAD/i)).toBeInTheDocument();
     expect(screen.getByText(/Review & Audit/i)).toBeInTheDocument();
   });
+
+  it('renders District Analytics Catalog Offline error state with retry action when API fails', async () => {
+    vi.mocked(api.getDistrictCatalog).mockRejectedValueOnce(new Error('Network Gateway Timeout'));
+
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/District Analytics Catalog Offline/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Network Gateway Timeout/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
+  });
+
+  it('renders empty comparison state when comparison data has no records', async () => {
+    vi.mocked(api.getDistrictComparison).mockResolvedValueOnce({
+      s_no: '14.12.1',
+      parameter_name: 'Outpatient attendance',
+      reporting_month: '2015-04',
+      subgroup_type: 'TOTAL',
+      is_subgroup_total: true,
+      is_stock_metric: false,
+      total_districts: 0,
+      reporting_districts: 0,
+      state_mean: null,
+      state_median: null,
+      state_total: null,
+      items: [],
+      data_note: 'No records available',
+    });
+
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /District Comparison/i })).toBeInTheDocument();
+    });
+
+    const compareTab = screen.getByRole('button', { name: /District Comparison/i });
+    fireEvent.click(compareTab);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No District Comparison Observations Available/i)).toBeInTheDocument();
+    });
+  });
 });

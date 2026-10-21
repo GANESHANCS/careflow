@@ -240,7 +240,7 @@ export const DistrictsPage: React.FC = () => {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           selectedDistrict={selectedDistrict}
-          totalDistricts={catalog?.districts?.length ?? 31}
+          totalDistricts={catalog?.districts?.length ?? 32}
           totalIndicators={indicators.length}
         />
       </ScrollReveal>

@@ -295,3 +295,62 @@ echo \"Backup catalog verification exit code: $?\"
 * When an administrator requests a rollback of an import job (`POST /api/imports/{job_code}/rollback`), CAREFlow verifies whether subsequent completed imports modified the same observation rows.
 * If a dependent subsequent job exists, the rollback is rejected with `HTTP 409 Conflict` to prevent overwriting more recent valid data.
 * **Resolution**: Roll back the subsequent dependent job first, and then roll back the target historical job.
+
+---
+
+## 11. Local Clean-Terminal Startup & Demonstration Runbook
+
+### Environment Requirements
+* **Python**: Version 3.12+ (local runtime: Python 3.12.7 in `d:\careflow\.venv`)
+* **Node.js**: Version 24+ / npm 11+ (local runtime: Node 24 with Vite 8 & React 19)
+* **Database**: `careflow_dev.db` (SQLite 3.40+, 213 MB, pre-populated with 175,872 official Tamil Nadu FY 2015–16 HMIS records and synthetic facility fixtures)
+
+### Terminal 1: Backend API Server Startup
+Open a clean PowerShell / terminal in `D:\careflow`:
+```powershell
+# 1. Activate Python virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# 2. Verify database migration head status (expected: d3e4f5a6b7c8 head)
+python -m alembic current
+
+# 3. Verify database integrity
+python -c "import sqlite3; con = sqlite3.connect('careflow_dev.db'); print(con.execute('PRAGMA integrity_check;').fetchall()); con.close()"
+
+# 4. Launch FastAPI server with live reload and background worker
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+* Backend URL: `http://127.0.0.1:8000`
+* Interactive API Documentation: `http://127.0.0.1:8000/docs`
+* High-frequency Liveness Probe: `http://127.0.0.1:8000/api/healthz`
+* Deep Readiness Probe: `http://127.0.0.1:8000/api/readyz`
+
+### Terminal 2: React Frontend Startup
+Open a second clean terminal in `D:\careflow\frontend`:
+```powershell
+cd D:\careflow\frontend
+
+# 1. Verify dependencies and run static lint
+npm run lint
+
+# 2. Launch Vite development server
+npm run dev
+```
+* Frontend Application URL: `http://localhost:5173`
+
+### Pre-Seeded Demonstration Accounts
+| Username | Password | Role | Permissions |
+| :--- | :--- | :--- | :--- |
+| `admin` | `Password123!` | `ADMIN` | Unrestricted: HMIS uploads, rollbacks, anomaly reviews, facility management |
+| `analyst` | `Password123!` | `ANALYST` | Operational: HMIS uploads, anomaly review status transitions, analytics exports |
+| `viewer` | `Password123!` | `VIEWER` | Read-only: Workspace analytics, observation tables, streaming CSV downloads |
+
+### Clinical Data Architecture & Stream Isolation
+When demonstrating the platform to evaluators, explicitly highlight the structural isolation between data tiers:
+1. **Official State HMIS Data Tier (`district_observations`)**:
+   * **Scope**: 175,872 consolidated administrative records across all 32 revenue districts of Tamil Nadu for FY 2015–16.
+   * **Indicators**: 261 official MoHFW parameter lines (S.No. 1.1 through 14.12.1).
+   * **Integrity**: Missing observations are strictly differentiated from genuine zero reports (`value_type="ZERO"` vs `value_type="MISSING"`). Non-additive stock metrics (such as bed capacities) are explicitly labeled and prevented from summation.
+2. **Facility Demonstration Tier (`facilities`, `observations`, `forecasts`)**:
+   * **Scope**: 9 demonstration health facilities, 362 observations, 108 model forecasts.
+   * **Labeling**: All facility fixtures are explicitly prefixed with `Synthetic` / `SYNTHETIC` to eliminate any ambiguity.

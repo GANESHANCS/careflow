@@ -21,6 +21,23 @@ export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = (
 }) => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha'>('desc');
 
+  const items = comparisonData?.items;
+
+  // Sort items unconditionally obeying React Rules of Hooks
+  const sortedItems = useMemo(() => {
+    if (!items || items.length === 0) return [];
+    return [...items].sort((a, b) => {
+      if (sortOrder === 'alpha') {
+        return a.district.localeCompare(b.district);
+      }
+      // Place missing values at the end
+      if (a.value === null && b.value === null) return a.district.localeCompare(b.district);
+      if (a.value === null) return 1;
+      if (b.value === null) return -1;
+      return sortOrder === 'desc' ? b.value - a.value : a.value - b.value;
+    });
+  }, [items, sortOrder]);
+
   if (loading) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs animate-pulse space-y-4">
@@ -30,9 +47,7 @@ export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = (
     );
   }
 
-  const items = comparisonData?.items ?? [];
-
-  if (!comparisonData || items.length === 0) {
+  if (!comparisonData || !items || items.length === 0) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8 shadow-xs text-center space-y-3">
         <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
@@ -48,19 +63,6 @@ export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = (
     );
   }
 
-  // Sort items
-  const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => {
-      if (sortOrder === 'alpha') {
-        return a.district.localeCompare(b.district);
-      }
-      // Place missing values at the end
-      if (a.value === null && b.value === null) return a.district.localeCompare(b.district);
-      if (a.value === null) return 1;
-      if (b.value === null) return -1;
-      return sortOrder === 'desc' ? b.value - a.value : a.value - b.value;
-    });
-  }, [items, sortOrder]);
 
   // Determine max value for bar scaling
   const numericValues = items
