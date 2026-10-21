@@ -9,6 +9,7 @@ from backend.app.db.models.district_observation import DistrictObservation
 from backend.app.db.models.indicator import Indicator
 from backend.app.db.models.import_job import ImportJob
 from backend.app.services.imports.district_adapter import DistrictHMISAdapter
+from backend.app.services.analytics.indicator_registry import IndicatorMappingRegistry, MappingStatus
 from backend.app.schemas.district_analytics import (
     DistrictCatalogResponse,
     DistrictIndicatorItem,
@@ -19,6 +20,9 @@ from backend.app.schemas.district_analytics import (
     DistrictComparisonResponse,
     DistrictCoverageItem,
     DistrictDataQualitySummaryResponse,
+    IndicatorMappingItem,
+    IndicatorRegistryResponse,
+    IndicatorAuditReportResponse,
 )
 
 
@@ -101,10 +105,8 @@ class DistrictAnalyticsService:
         unmapped_count = 0
 
         for s_no, param_name in params:
-            is_stock = s_no in DistrictHMISAdapter.NON_ADDITIVE_SNO_ITEMS
-            canonical_id = DistrictHMISAdapter.CORE_INDICATOR_CROSSWALK.get(s_no.lower())
-            is_mapped = canonical_id is not None
-            canonical_name = indicator_cache.get(canonical_id) if canonical_id else None
+            mapping = IndicatorMappingRegistry.get_mapping(s_no, param_name)
+            is_mapped = mapping.status.value == "VERIFIED"
 
             if is_mapped:
                 mapped_count += 1
@@ -116,10 +118,10 @@ class DistrictAnalyticsService:
                     s_no=s_no,
                     parameter_name=param_name,
                     available_subgroups=sorted(subgroup_map.get(s_no, ["TOTAL"])),
-                    is_stock_metric=is_stock,
+                    is_stock_metric=mapping.is_stock_metric,
                     is_mapped=is_mapped,
-                    canonical_indicator_id=canonical_id,
-                    canonical_indicator_name=canonical_name
+                    canonical_indicator_id=mapping.canonical_id,
+                    canonical_indicator_name=mapping.canonical_name
                 )
             )
 
@@ -136,7 +138,8 @@ class DistrictAnalyticsService:
         s_no: str,
         subgroup_type: Optional[str] = None,
         start_month: Optional[str] = None,
-        end_month: Optional[str] = None
+        end_month: Optional[str] = None,
+        financial_year: Optional[str] = None,
     ) -> DistrictMonthlyTrendsResponse:
         """Fetches chronological monthly observations for a single district and indicator."""
         # Validate district exists
@@ -190,6 +193,8 @@ class DistrictAnalyticsService:
             query = query.filter(DistrictObservation.reporting_month >= start_month)
         if end_month:
             query = query.filter(DistrictObservation.reporting_month <= end_month)
+        if financial_year:
+            query = query.filter(DistrictObservation.financial_year == financial_year.strip())
 
         records = query.order_by(DistrictObservation.reporting_month.asc()).all()
 
@@ -268,7 +273,8 @@ class DistrictAnalyticsService:
         s_no: str,
         reporting_month: str,
         subgroup_type: Optional[str] = None,
-        districts: Optional[List[str]] = None
+        districts: Optional[List[str]] = None,
+        financial_year: Optional[str] = None,
     ) -> DistrictComparisonResponse:
         """Cross-district comparison for a specified indicator and period."""
         # Validate S.No.
@@ -306,6 +312,9 @@ class DistrictAnalyticsService:
             DistrictObservation.reporting_month == reporting_month,
             DistrictObservation.subgroup_type == subgroup_type
         )
+
+        if financial_year:
+            query = query.filter(DistrictObservation.financial_year == financial_year.strip())
 
         if districts:
             query = query.filter(DistrictObservation.district.in_(districts))
@@ -462,4 +471,33 @@ class DistrictAnalyticsService:
             import_job=job_dict,
             district_coverage=coverage_list,
             audit_timestamp=datetime.now(timezone.utc).isoformat()
+        )
+
+    def get_indicator_registry(self, status_filter: Optional[str] = None) -> IndicatorRegistryResponse:
+        """Fetches all observed indicators from the verified mapping registry with audit metadata."""
+        records = IndicatorMappingRegistry.get_all_mappings(self.db, status_filter=status_filter)
+        verified = sum(1 for r in records if r.status == MappingStatus.VERIFIED)
+        unmapped = sum(1 for r in records if r.status == MappingStatus.UNMAPPED)
+        return IndicatorRegistryResponse(
+            total_items=len(records),
+            verified_count=verified,
+            unmapped_count=unmapped,
+            items=[IndicatorMappingItem(**r.to_dict()) for r in records]
+        )
+
+    def get_indicator_audit_report(self) -> IndicatorAuditReportResponse:
+        """Generates a formal indicator mapping audit report with clinical definitions and provenance."""
+        summary = IndicatorMappingRegistry.get_audit_summary(self.db)
+        return IndicatorAuditReportResponse(
+            total_parameters_observed=summary["total_parameters_observed"],
+            verified_mappings_count=summary["verified_mappings_count"],
+            provisional_mappings_count=summary["provisional_mappings_count"],
+            unmapped_parameters_count=summary["unmapped_parameters_count"],
+            verified_percentage=summary["verified_percentage"],
+            unmapped_percentage=summary["unmapped_percentage"],
+            stock_metrics_count=summary["stock_metrics_count"],
+            verified_mappings=[IndicatorMappingItem(**vm) for vm in summary["verified_mappings"]],
+            unmapped_indicators_sample=summary["unmapped_indicators_sample"],
+            governance_note=summary["governance_note"],
+            audit_timestamp=summary["audit_timestamp"]
         )

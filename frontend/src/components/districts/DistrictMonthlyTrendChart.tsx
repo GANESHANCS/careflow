@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { LineChart as LineChartIcon, Info, AlertTriangle, CheckCircle } from 'lucide-react';
+import { LineChart as LineChartIcon, Info, AlertTriangle, CheckCircle, Download } from 'lucide-react';
 import type { DistrictMonthlyTrendsResponse, DistrictTrendObservation } from '../../api/types';
 
 interface DistrictMonthlyTrendChartProps {
   trendData: DistrictMonthlyTrendsResponse | null;
   loading: boolean;
+  onExportCsv?: () => void;
+  isExporting?: boolean;
 }
 
 export const DistrictMonthlyTrendChart: React.FC<DistrictMonthlyTrendChartProps> = ({
   trendData,
   loading,
+  onExportCsv,
+  isExporting = false,
 }) => {
   const [hoveredPoint, setHoveredPoint] = useState<DistrictTrendObservation | null>(null);
 
@@ -117,7 +121,7 @@ export const DistrictMonthlyTrendChart: React.FC<DistrictMonthlyTrendChartProps>
           </p>
         </div>
 
-        {/* Data Quality Counters */}
+        {/* Data Quality Counters & Export Action */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
             <CheckCircle className="w-3 h-3 text-emerald-600" />
@@ -132,6 +136,18 @@ export const DistrictMonthlyTrendChart: React.FC<DistrictMonthlyTrendChartProps>
               <AlertTriangle className="w-3 h-3 text-amber-600" />
               <span>Missing: {trendData.missing_months_count}</span>
             </span>
+          )}
+
+          {onExportCsv && (
+            <button
+              onClick={onExportCsv}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-lg text-xs transition-colors cursor-pointer disabled:opacity-50 ml-1 shadow-xs"
+              title="Download RFC 4180 CSV export with formula injection protection"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-300" />
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
           )}
         </div>
       </div>

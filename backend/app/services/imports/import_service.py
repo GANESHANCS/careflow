@@ -1049,7 +1049,13 @@ class HMISImportService:
         jobs = self.db.query(ImportJob).filter(ImportJob.batch_id == batch.id).all()
         for job in jobs:
             if job.status in ("QUEUED", "PROCESSING", "VALIDATED"):
-                self.cancel_import_job(job.id, cancelled_by=cancelled_by, reason=reason)
+                try:
+                    self.cancel_import_job(job.id, cancelled_by=cancelled_by, reason=reason)
+                except Exception as exc:
+                    logger.warning(
+                        f"Job '{job.job_code}' could not be cancelled during batch cancellation "
+                        f"(status may have changed concurrently): {exc}"
+                    )
 
         batch.status = "CANCELLED"
         batch.completed_at = datetime.now(timezone.utc)

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Search, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Table, Search, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import type { DistrictTrendObservation } from '../../api/types';
 
 interface DistrictDetailTableProps {
@@ -7,6 +7,8 @@ interface DistrictDetailTableProps {
   district: string;
   sNo: string;
   parameterName: string;
+  onExportCsv?: () => void;
+  isExporting?: boolean;
 }
 
 export const DistrictDetailTable: React.FC<DistrictDetailTableProps> = ({
@@ -14,6 +16,8 @@ export const DistrictDetailTable: React.FC<DistrictDetailTableProps> = ({
   district,
   sNo,
   parameterName,
+  onExportCsv,
+  isExporting = false,
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -44,16 +48,30 @@ export const DistrictDetailTable: React.FC<DistrictDetailTableProps> = ({
           </p>
         </div>
 
-        {/* Filter within table */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search month or subgroup..."
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-primary)] focus-ring"
-          />
+        {/* Filter within table & Export Action */}
+        <div className="flex items-center gap-3">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search month or subgroup..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-primary)] focus-ring"
+            />
+          </div>
+
+          {onExportCsv && (
+            <button
+              onClick={onExportCsv}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-xs transition-colors cursor-pointer disabled:opacity-50 shrink-0 shadow-xs"
+              title="Download filtered observation rows as RFC 4180 CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-300" />
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
+          )}
         </div>
       </div>
 

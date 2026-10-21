@@ -118,3 +118,40 @@ class DistrictDataQualitySummaryResponse(BaseModel):
     import_job: Optional[Dict[str, Any]] = None
     district_coverage: List[DistrictCoverageItem] = []
     audit_timestamp: str
+
+
+# Phase 12B Verified Indicator Registry Schemas
+class IndicatorMappingItem(BaseModel):
+    s_no: str
+    parameter_name: str
+    canonical_id: Optional[str] = None
+    canonical_name: Optional[str] = None
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    status: str
+    rationale: str
+    clinical_definition: Optional[str] = None
+    provenance: str
+    is_stock_metric: bool
+    reviewed_at: str
+
+
+class IndicatorRegistryResponse(BaseModel):
+    total_items: int
+    verified_count: int
+    unmapped_count: int
+    items: List[IndicatorMappingItem]
+
+
+class IndicatorAuditReportResponse(BaseModel):
+    total_parameters_observed: int
+    verified_mappings_count: int
+    provisional_mappings_count: int
+    unmapped_parameters_count: int
+    verified_percentage: float
+    unmapped_percentage: float
+    stock_metrics_count: int
+    verified_mappings: List[IndicatorMappingItem]
+    unmapped_indicators_sample: List[str]
+    governance_note: str
+    audit_timestamp: str

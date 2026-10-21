@@ -35,6 +35,7 @@ export const DistrictsPage: React.FC = () => {
   const [selectedSNo, setSelectedSNo] = useState<string>('');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [selectedSubgroup, setSelectedSubgroup] = useState<string>('');
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState<string>('');
 
   // Analytics Result state
   const [trendsData, setTrendsData] = useState<DistrictMonthlyTrendsResponse | null>(null);
@@ -47,6 +48,10 @@ export const DistrictsPage: React.FC = () => {
 
   const [qualityData, setQualityData] = useState<DistrictDataQualitySummaryResponse | null>(null);
   const [qualityLoading, setQualityLoading] = useState<boolean>(false);
+
+  // Export progress states
+  const [exportingTrends, setExportingTrends] = useState<boolean>(false);
+  const [exportingComparison, setExportingComparison] = useState<boolean>(false);
 
   // 1. Initial Catalog & Indicators Fetch
   const fetchCatalogAndIndicators = useCallback(() => {
@@ -69,19 +74,22 @@ export const DistrictsPage: React.FC = () => {
         if (!selectedPeriod && catRes.reporting_periods && catRes.reporting_periods.length > 0) {
           setSelectedPeriod(catRes.reporting_periods[0]);
         }
+        if (!selectedFinancialYear && catRes.financial_years && catRes.financial_years.length > 0) {
+          setSelectedFinancialYear(catRes.financial_years[0]);
+        }
         setCatalogLoading(false);
       })
       .catch((err) => {
         setCatalogError(err instanceof Error ? err.message : 'Unable to connect to District Analytics Catalog.');
         setCatalogLoading(false);
       });
-  }, [selectedDistrict, selectedSNo, selectedPeriod]);
+  }, [selectedDistrict, selectedSNo, selectedPeriod, selectedFinancialYear]);
 
   useEffect(() => {
     fetchCatalogAndIndicators();
   }, [fetchCatalogAndIndicators]);
 
-  // 2. Fetch Monthly Trends when District, S.No, or Subgroup changes
+  // 2. Fetch Monthly Trends when District, S.No, Subgroup, or FY changes
   const fetchMonthlyTrends = useCallback(() => {
     if (!selectedDistrict || !selectedSNo) return;
 
@@ -92,6 +100,7 @@ export const DistrictsPage: React.FC = () => {
       district: selectedDistrict,
       s_no: selectedSNo,
       subgroup_type: selectedSubgroup || undefined,
+      financial_year: selectedFinancialYear || undefined,
     })
       .then((data) => {
         setTrendsData(data);
@@ -101,13 +110,13 @@ export const DistrictsPage: React.FC = () => {
         setTrendsError(err instanceof Error ? err.message : 'Error fetching monthly trend observations.');
         setTrendsLoading(false);
       });
-  }, [selectedDistrict, selectedSNo, selectedSubgroup]);
+  }, [selectedDistrict, selectedSNo, selectedSubgroup, selectedFinancialYear]);
 
   useEffect(() => {
     fetchMonthlyTrends();
   }, [fetchMonthlyTrends]);
 
-  // 3. Fetch Cross-District Comparison when S.No or Comparison Period changes
+  // 3. Fetch Cross-District Comparison when S.No, Period, Subgroup, or FY changes
   const fetchDistrictComparison = useCallback(() => {
     if (!selectedSNo || !selectedPeriod) return;
 
@@ -118,6 +127,7 @@ export const DistrictsPage: React.FC = () => {
       s_no: selectedSNo,
       reporting_month: selectedPeriod,
       subgroup_type: selectedSubgroup || undefined,
+      financial_year: selectedFinancialYear || undefined,
     })
       .then((data) => {
         setComparisonData(data);
@@ -127,7 +137,7 @@ export const DistrictsPage: React.FC = () => {
         setComparisonError(err instanceof Error ? err.message : 'Error fetching district comparison data.');
         setComparisonLoading(false);
       });
-  }, [selectedSNo, selectedPeriod, selectedSubgroup]);
+  }, [selectedSNo, selectedPeriod, selectedSubgroup, selectedFinancialYear]);
 
   useEffect(() => {
     fetchDistrictComparison();
@@ -150,11 +160,47 @@ export const DistrictsPage: React.FC = () => {
     fetchQualitySummary();
   }, [fetchQualitySummary]);
 
+  // Export handlers
+  const handleExportTrends = useCallback(async () => {
+    if (!selectedDistrict || !selectedSNo) return;
+    setExportingTrends(true);
+    try {
+      await api.downloadDistrictTrendsCsv({
+        district: selectedDistrict,
+        s_no: selectedSNo,
+        subgroup_type: selectedSubgroup || undefined,
+        financial_year: selectedFinancialYear || undefined,
+      });
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setExportingTrends(false);
+    }
+  }, [selectedDistrict, selectedSNo, selectedSubgroup, selectedFinancialYear]);
+
+  const handleExportComparison = useCallback(async () => {
+    if (!selectedSNo || !selectedPeriod) return;
+    setExportingComparison(true);
+    try {
+      await api.downloadDistrictComparisonCsv({
+        s_no: selectedSNo,
+        reporting_month: selectedPeriod,
+        subgroup_type: selectedSubgroup || undefined,
+        financial_year: selectedFinancialYear || undefined,
+      });
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setExportingComparison(false);
+    }
+  }, [selectedSNo, selectedPeriod, selectedSubgroup, selectedFinancialYear]);
+
   // Reset filter state to initial defaults
   const handleResetFilters = () => {
     if (catalog?.districts?.length) setSelectedDistrict(catalog.districts[0]);
     if (indicators.length) setSelectedSNo(indicators[0].s_no);
     if (catalog?.reporting_periods?.length) setSelectedPeriod(catalog.reporting_periods[0]);
+    if (catalog?.financial_years?.length) setSelectedFinancialYear(catalog.financial_years[0]);
     setSelectedSubgroup('');
   };
 
@@ -206,6 +252,7 @@ export const DistrictsPage: React.FC = () => {
             indicators={indicators}
             reportingPeriods={catalog?.reporting_periods ?? []}
             subgroups={catalog?.subgroup_types ?? []}
+            financialYears={catalog?.financial_years ?? []}
             selectedDistrict={selectedDistrict}
             onDistrictChange={setSelectedDistrict}
             selectedSNo={selectedSNo}
@@ -214,6 +261,8 @@ export const DistrictsPage: React.FC = () => {
             onPeriodChange={setSelectedPeriod}
             selectedSubgroup={selectedSubgroup}
             onSubgroupChange={setSelectedSubgroup}
+            selectedFinancialYear={selectedFinancialYear}
+            onFinancialYearChange={setSelectedFinancialYear}
             onReset={handleResetFilters}
           />
         </ScrollReveal>
@@ -232,6 +281,8 @@ export const DistrictsPage: React.FC = () => {
             <DistrictMonthlyTrendChart
               trendData={trendsData}
               loading={trendsLoading}
+              onExportCsv={handleExportTrends}
+              isExporting={exportingTrends}
             />
           )}
         </ScrollReveal>
@@ -255,6 +306,8 @@ export const DistrictsPage: React.FC = () => {
                 setSelectedDistrict(dist);
                 setActiveTab('trends');
               }}
+              onExportCsv={handleExportComparison}
+              isExporting={exportingComparison}
             />
           )}
         </ScrollReveal>
@@ -268,11 +321,13 @@ export const DistrictsPage: React.FC = () => {
             district={selectedDistrict}
             sNo={selectedSNo}
             parameterName={currentParamDesc}
+            onExportCsv={handleExportTrends}
+            isExporting={exportingTrends}
           />
         </ScrollReveal>
       )}
 
-      {/* Tab 4: Phase 11F Data Quality, Ingestion Traceability & Provenance */}
+      {/* Tab 4: Phase 11F & 12B Data Quality, Ingestion Traceability & Verified Registry */}
       {activeTab === 'quality' && (
         <ScrollReveal delay={0.1}>
           <DistrictQualityTab

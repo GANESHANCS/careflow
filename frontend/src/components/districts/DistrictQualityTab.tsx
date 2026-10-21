@@ -1,6 +1,17 @@
-import React from 'react';
-import { ShieldCheck, Database, CheckCircle2, AlertTriangle, Clock, FileCheck, Layers, FileSpreadsheet } from 'lucide-react';
-import type { DistrictDataQualitySummaryResponse } from '../../api/types';
+import React, { useState, useEffect } from 'react';
+import {
+  ShieldCheck,
+  Database,
+  CheckCircle2,
+  AlertTriangle,
+  FileCheck,
+  FileSpreadsheet,
+  BookOpen,
+  Info,
+  Check,
+} from 'lucide-react';
+import { api } from '../../api/client';
+import type { DistrictDataQualitySummaryResponse, IndicatorAuditReportResponse } from '../../api/types';
 
 interface DistrictQualityTabProps {
   qualityData: DistrictDataQualitySummaryResponse | null;
@@ -11,6 +22,19 @@ export const DistrictQualityTab: React.FC<DistrictQualityTabProps> = ({
   qualityData,
   loading,
 }) => {
+  const [auditReport, setAuditReport] = useState<IndicatorAuditReportResponse | null>(null);
+
+  useEffect(() => {
+    api
+      .getIndicatorAudit()
+      .then((res) => {
+        setAuditReport(res);
+      })
+      .catch(() => {
+        // Fallback silently if audit endpoint is unavailable
+      });
+  }, []);
+
   if (loading) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs animate-pulse space-y-4">
@@ -68,135 +92,174 @@ export const DistrictQualityTab: React.FC<DistrictQualityTabProps> = ({
         </div>
 
         {/* Valid Observations */}
-        <div className="bg-[var(--bg-surface)] border border-emerald-200/80 rounded-2xl p-4 shadow-xs bg-emerald-50/20">
-          <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-4 shadow-xs">
+          <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Valid Non-Zero Values</span>
+            <span>Valid Returns</span>
           </div>
           <div className="text-xl sm:text-2xl font-mono font-extrabold text-emerald-700 mt-1">
             {validCount.toLocaleString()}
           </div>
-          <div className="text-[11px] text-emerald-800/80 mt-1">
-            {validPct}% of all observations
+          <div className="text-[11px] text-emerald-600 mt-1 font-semibold">
+            {validPct}% of recorded observations
           </div>
         </div>
 
-        {/* Explicit Zero Observations */}
-        <div className="bg-[var(--bg-surface)] border border-slate-300 rounded-2xl p-4 shadow-xs bg-slate-50/60">
+        {/* Confirmed Zero Observations */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-4 shadow-xs">
           <div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-            <span>Explicit Zeroes (0)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+            <span>Confirmed Zero Events</span>
           </div>
-          <div className="text-xl sm:text-2xl font-mono font-extrabold text-slate-800 mt-1">
+          <div className="text-xl sm:text-2xl font-mono font-extrabold text-slate-700 mt-1">
             {zeroCount.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-600 mt-1">
-            {zeroPct}% verified zero activity
+          <div className="text-[11px] text-slate-500 mt-1">
+            {zeroPct}% distinct from missing
           </div>
         </div>
 
-        {/* Missing / Null Observations */}
-        <div className="bg-[var(--bg-surface)] border border-amber-200 rounded-2xl p-4 shadow-xs bg-amber-50/30">
-          <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+        {/* Missing Returns */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-4 shadow-xs">
+          <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-            <span>Missing / Null Entries</span>
+            <span>Missing / Unreported</span>
           </div>
           <div className="text-xl sm:text-2xl font-mono font-extrabold text-amber-700 mt-1">
             {missingCount.toLocaleString()}
           </div>
-          <div className="text-[11px] text-amber-800 mt-1">
-            {missingPct}% preserved as null (never 0)
+          <div className="text-[11px] text-amber-600 mt-1">
+            {missingPct}% explicit null state
           </div>
         </div>
       </div>
 
-      {/* 2. Import Job Traceability & Provenance */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-[var(--teal-600)]" />
-            <h3 className="font-display font-bold text-base text-[var(--text-primary)]">
-              Import Pipeline Execution Traceability
-            </h3>
-          </div>
-          <span className="text-[11px] font-mono text-[var(--text-muted)]">
-            Adapter: {qualityData.import_job?.schema_profile || 'district_monthly_tabular_v1'}
-          </span>
-        </div>
-
-        {!qualityData.import_job ? (
-          <div className="text-center py-6 text-xs text-[var(--text-muted)]">
-            No registered district import execution record found.
-          </div>
-        ) : (
-          <div className="p-4 bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] rounded-xl space-y-3 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-2">
-              <div className="flex items-center gap-2 font-mono font-bold text-[var(--text-primary)]">
-                <Clock className="w-3.5 h-3.5 text-teal-600" />
-                <span>Job Code: {qualityData.import_job.job_code}</span>
-              </div>
+      {/* 2. Phase 12B Verified Indicator Registry Audit Card */}
+      {auditReport && (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 sm:p-7 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-4">
+            <div>
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {qualityData.import_job.status}
-                </span>
-                <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                  {qualityData.import_job.completed_at || 'Completed'}
-                </span>
+                <BookOpen className="w-4 h-4 text-teal-600" />
+                <h4 className="font-display font-bold text-base text-[var(--text-primary)]">
+                  Phase 12B Verified Indicator Registry & Governance Audit
+                </h4>
               </div>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                Authoritative crosswalk between MoHFW raw item serials and canonical CAREFlow clinical definitions.
+              </p>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full bg-teal-50 text-teal-800 border border-teal-200 text-xs font-semibold flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 text-teal-600" />
+                <span>{auditReport.verified_mappings_count} Verified ({auditReport.verified_percentage}%)</span>
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold">
+                {auditReport.unmapped_parameters_count} Unmapped ({auditReport.unmapped_percentage}%)
+              </span>
+            </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+          {/* Governance Note */}
+          <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5 leading-relaxed">
+            <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Strict Non-Fabrication Rule: </span>
+              {auditReport.governance_note}
+            </div>
+          </div>
+
+          {/* Verified Mappings Table */}
+          <div className="space-y-3">
+            <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
+              Verified Clinical Crosswalk Specifications ({auditReport.verified_mappings.length} Canonical Indicators)
+            </div>
+            <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-surface-subtle)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] uppercase tracking-wider font-bold">
+                    <th className="py-2.5 px-3">MoHFW Code</th>
+                    <th className="py-2.5 px-3">Raw Parameter Label</th>
+                    <th className="py-2.5 px-3">Canonical Equivalent</th>
+                    <th className="py-2.5 px-3">Clinical Rationale & Provenance</th>
+                    <th className="py-2.5 px-3">Category</th>
+                    <th className="py-2.5 px-3">Unit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)] font-sans">
+                  {auditReport.verified_mappings.map((vm) => (
+                    <tr key={vm.s_no} className="hover:bg-[var(--bg-surface-subtle)] transition-colors">
+                      <td className="py-2 px-3 font-mono font-bold text-teal-700 whitespace-nowrap">
+                        {vm.s_no}
+                      </td>
+                      <td className="py-2 px-3 font-medium text-[var(--text-primary)] max-w-xs">
+                        {vm.parameter_name}
+                      </td>
+                      <td className="py-2 px-3 font-mono font-semibold text-slate-800 whitespace-nowrap">
+                        {vm.canonical_id}
+                        <div className="text-[10px] font-sans text-teal-700 font-bold">{vm.canonical_name}</div>
+                      </td>
+                      <td className="py-2 px-3 text-[11px] text-[var(--text-secondary)] leading-relaxed max-w-md">
+                        {vm.rationale}
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-mono">Ref: {vm.provenance}</div>
+                      </td>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-semibold">
+                          {vm.category}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-[11px] text-slate-600 capitalize">
+                        {vm.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Ingestion Provenance & Job Metadata */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Source File & Import Provenance */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2">
+            <FileSpreadsheet className="w-4 h-4 text-[var(--teal-600)]" />
+            <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
+              Source Archive & Execution Provenance
+            </h4>
+          </div>
+          {qualityData.import_job ? (
+            <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <span className="text-[var(--text-muted)] font-medium">Source Filename:</span>
-                <div className="font-mono font-bold text-[var(--text-primary)] truncate" title={qualityData.import_job.original_filename}>
+                <span className="text-[var(--text-muted)] font-medium">Source File:</span>
+                <p className="font-mono font-bold text-[var(--text-primary)] truncate mt-0.5">
                   {qualityData.import_job.original_filename}
-                </div>
+                </p>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] font-medium">Job Code:</span>
+                <p className="font-mono font-bold text-[var(--text-primary)] mt-0.5">
+                  {qualityData.import_job.job_code}
+                </p>
               </div>
               <div>
                 <span className="text-[var(--text-muted)] font-medium">Schema Profile:</span>
-                <div className="font-mono text-[var(--text-secondary)]">
+                <p className="font-mono font-bold text-teal-700 mt-0.5">
                   {qualityData.import_job.schema_profile}
-                </div>
+                </p>
               </div>
               <div>
-                <span className="text-[var(--text-muted)] font-medium">Processed Rows / Imported:</span>
-                <div className="font-mono font-bold text-[var(--text-primary)]">
-                  {qualityData.import_job.records_imported.toLocaleString()} Wide Records ({qualityData.total_records.toLocaleString()} Observations)
-                </div>
+                <span className="text-[var(--text-muted)] font-medium">Execution Status:</span>
+                <p className="font-bold text-emerald-700 mt-0.5">
+                  {qualityData.import_job.status} ({qualityData.import_job.records_imported.toLocaleString()} imported)
+                </p>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Subgroup Aggregation Safeguards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Structural Subgroup Breakdown */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-xs space-y-3">
-          <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2">
-            <Layers className="w-4 h-4 text-indigo-600" />
-            <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
-              Subgroup Slice & Stock Metric Classification
-            </h4>
-          </div>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between p-2 bg-[var(--bg-surface-subtle)] rounded-lg">
-              <span className="text-[var(--text-secondary)]">Distinct HMIS Parameters:</span>
-              <span className="font-mono font-bold text-[var(--text-primary)]">{qualityData.parameters_count}</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-emerald-50/50 rounded-lg text-emerald-900 border border-emerald-100">
-              <span className="font-medium">Subgroup Total Records (Non-Additive with Slices):</span>
-              <span className="font-mono font-bold">{qualityData.subgroup_totals_count.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-slate-100/70 rounded-lg text-slate-800">
-              <span className="font-medium">Subgroup Slice Records (e.g. Rural, Urban):</span>
-              <span className="font-mono font-bold">{qualityData.subgroup_slices_count.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-amber-50/50 rounded-lg text-amber-900 border border-amber-100">
-              <span className="font-medium">Non-Additive Stock/Capacity Observations:</span>
-              <span className="font-mono font-bold">{qualityData.non_additive_stock_rows.toLocaleString()}</span>
-            </div>
-          </div>
+          ) : (
+            <p className="text-xs text-[var(--text-secondary)]">Historical import job record attached.</p>
+          )}
           <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
             The analytics service prevents double counting by filtering subgroup totals from slice records and prohibiting temporal sums of stock indicators.
           </p>
@@ -227,10 +290,10 @@ export const DistrictQualityTab: React.FC<DistrictQualityTabProps> = ({
             </div>
             <div className="p-2 bg-[var(--bg-surface-subtle)] rounded-lg space-y-0.5">
               <div className="font-bold text-[var(--text-primary)] flex items-center justify-between">
-                <span>Reversible Transformation</span>
+                <span>Formula Injection Protection</span>
                 <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Enforced</span>
               </div>
-              <div className="text-[11px] text-[var(--text-secondary)]">Source row indices and reported annual totals are preserved for complete audit traceability.</div>
+              <div className="text-[11px] text-[var(--text-secondary)]">All exported CSV outputs escape spreadsheet macro triggers (=, +, -, @, tab, CR) per OWASP guidelines.</div>
             </div>
           </div>
         </div>

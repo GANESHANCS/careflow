@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart3, Info } from 'lucide-react';
+import { BarChart3, Info, Download } from 'lucide-react';
 import type { DistrictComparisonResponse } from '../../api/types';
 
 interface DistrictComparisonChartProps {
@@ -7,6 +7,8 @@ interface DistrictComparisonChartProps {
   loading: boolean;
   selectedDistrict: string;
   onSelectDistrict: (district: string) => void;
+  onExportCsv?: () => void;
+  isExporting?: boolean;
 }
 
 export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = ({
@@ -14,6 +16,8 @@ export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = (
   loading,
   selectedDistrict,
   onSelectDistrict,
+  onExportCsv,
+  isExporting = false,
 }) => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha'>('desc');
 
@@ -115,6 +119,18 @@ export const DistrictComparisonChart: React.FC<DistrictComparisonChartProps> = (
               A–Z
             </button>
           </div>
+
+          {onExportCsv && (
+            <button
+              onClick={onExportCsv}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-xs transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
+              title="Download cross-district comparison CSV stream with formula injection protection"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-300" />
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
+          )}
         </div>
       </div>
 

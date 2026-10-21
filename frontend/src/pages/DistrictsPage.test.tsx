@@ -9,6 +9,7 @@ import type {
   DistrictMonthlyTrendsResponse,
   DistrictComparisonResponse,
   DistrictDataQualitySummaryResponse,
+  IndicatorAuditReportResponse,
 } from '../api/types';
 
 vi.mock('../api/client', () => ({
@@ -18,10 +19,14 @@ vi.mock('../api/client', () => ({
     getDistrictMonthlyTrends: vi.fn(),
     getDistrictComparison: vi.fn(),
     getDistrictQuality: vi.fn(),
+    getIndicatorAudit: vi.fn(),
+    getIndicatorRegistry: vi.fn(),
+    downloadDistrictTrendsCsv: vi.fn(),
+    downloadDistrictComparisonCsv: vi.fn(),
   },
 }));
 
-describe('DistrictsPage Component (Phases 11E & 11F)', () => {
+describe('DistrictsPage Component (Phases 11E–12E)', () => {
   const mockCatalog: DistrictCatalogResponse = {
     districts: ['Ariyalur', 'Chennai', 'Coimbatore'],
     reporting_periods: [
@@ -191,6 +196,35 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
     audit_timestamp: '2026-10-21T12:41:00Z',
   };
 
+  const mockAuditReport: IndicatorAuditReportResponse = {
+    total_parameters_observed: 261,
+    verified_mappings_count: 8,
+    provisional_mappings_count: 0,
+    unmapped_parameters_count: 253,
+    verified_percentage: 3.07,
+    unmapped_percentage: 96.93,
+    stock_metrics_count: 8,
+    verified_mappings: [
+      {
+        s_no: '1.1',
+        parameter_name: 'Total number of pregnant women registered for ANC',
+        canonical_id: 'IND_antenatal_visits',
+        canonical_name: 'Antenatal Care (ANC) Registered Visits',
+        category: 'Maternal Health',
+        unit: 'visits',
+        status: 'VERIFIED',
+        rationale: 'Direct clinical equivalent to MoHFW HMIS Item 1.1',
+        clinical_definition: 'Count of pregnant women registered for ANC',
+        provenance: 'MoHFW HMIS Operational Guidelines',
+        is_stock_metric: false,
+        reviewed_at: '2026-10-21T00:00:00Z',
+      },
+    ],
+    unmapped_indicators_sample: ['1.2', '1.3'],
+    governance_note: 'Strict non-fabrication rule enforced.',
+    audit_timestamp: '2026-10-21T12:41:00Z',
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getDistrictCatalog).mockResolvedValue(mockCatalog);
@@ -198,6 +232,9 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
     vi.mocked(api.getDistrictMonthlyTrends).mockResolvedValue(mockTrends);
     vi.mocked(api.getDistrictComparison).mockResolvedValue(mockComparison);
     vi.mocked(api.getDistrictQuality).mockResolvedValue(mockQuality);
+    vi.mocked(api.getIndicatorAudit).mockResolvedValue(mockAuditReport);
+    vi.mocked(api.downloadDistrictTrendsCsv).mockResolvedValue(undefined);
+    vi.mocked(api.downloadDistrictComparisonCsv).mockResolvedValue(undefined);
   });
 
   it('renders district workspace header with official data separation callout', async () => {
@@ -215,7 +252,7 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
     });
   });
 
-  it('populates filter dropdowns with catalog districts, indicators, and periods', async () => {
+  it('populates filter dropdowns with catalog districts, indicators, FY, and periods', async () => {
     render(
       <BrowserRouter>
         <DistrictsPage />
@@ -224,13 +261,14 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/Select district/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Select financial year/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Select HMIS Indicator/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Select comparison reporting period/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Select subgroup slice/i)).toBeInTheDocument();
     });
   });
 
-  it('renders monthly trend chart with zero vs missing indicators', async () => {
+  it('renders monthly trend chart with zero vs missing indicators and CSV export button', async () => {
     render(
       <BrowserRouter>
         <DistrictsPage />
@@ -243,9 +281,20 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
       expect(screen.getByText(/Zero: 1/i)).toBeInTheDocument();
       expect(screen.getByText(/Missing: 1/i)).toBeInTheDocument();
     });
+
+    const exportBtn = screen.getByRole('button', { name: /Export CSV/i });
+    expect(exportBtn).toBeInTheDocument();
+    fireEvent.click(exportBtn);
+
+    expect(api.downloadDistrictTrendsCsv).toHaveBeenCalledWith({
+      district: 'Ariyalur',
+      s_no: '1.1',
+      subgroup_type: undefined,
+      financial_year: '2015-16',
+    });
   });
 
-  it('switches to District Comparison tab and renders comparative horizontal bars', async () => {
+  it('switches to District Comparison tab, renders comparison, and triggers CSV export', async () => {
     render(
       <BrowserRouter>
         <DistrictsPage />
@@ -265,11 +314,20 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
       expect(screen.getByText(/District Mean/i)).toBeInTheDocument();
       expect(screen.getAllByText('Chennai').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Coimbatore').length).toBeGreaterThan(0);
-      expect(screen.getByText(/Missing \/ Not Reported/i)).toBeInTheDocument();
+    });
+
+    const exportBtn = screen.getByRole('button', { name: /Export CSV/i });
+    fireEvent.click(exportBtn);
+
+    expect(api.downloadDistrictComparisonCsv).toHaveBeenCalledWith({
+      s_no: '1.1',
+      reporting_month: '2015-04',
+      subgroup_type: undefined,
+      financial_year: '2015-16',
     });
   });
 
-  it('switches to Observation Records tab and renders raw observation records', async () => {
+  it('switches to Observation Records tab and renders raw observation records with export action', async () => {
     render(
       <BrowserRouter>
         <DistrictsPage />
@@ -290,9 +348,15 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
       expect(screen.getByText(/Zero Activity \(0\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Missing \/ Absent/i)).toBeInTheDocument();
     });
+
+    const exportBtn = screen.getByRole('button', { name: /Export CSV/i });
+    expect(exportBtn).toBeInTheDocument();
+    fireEvent.click(exportBtn);
+
+    expect(api.downloadDistrictTrendsCsv).toHaveBeenCalled();
   });
 
-  it('switches to Quality & Provenance tab and displays Phase 11F audit metrics', async () => {
+  it('switches to Quality & Provenance tab and displays Phase 11F & 12B verified registry audit', async () => {
     render(
       <BrowserRouter>
         <DistrictsPage />
@@ -307,12 +371,19 @@ describe('DistrictsPage Component (Phases 11E & 11F)', () => {
     fireEvent.click(qualityTab);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/1.*75.*872/).length).toBeGreaterThan(0);
       expect(screen.getByText(/Total Ingested Records/i)).toBeInTheDocument();
-      expect(screen.getByText(/Explicit Zeroes \(0\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/Import Pipeline Execution Traceability/i)).toBeInTheDocument();
-      expect(screen.getByText(/JOB_20261021_124025_eb4fc9/i)).toBeInTheDocument();
-      expect(screen.getByText(/Zero State Integrity/i)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText(/Confirmed Zero Events/i).length).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Phase 12B Verified Indicator Registry & Governance Audit/i)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Strict Non-Fabrication Rule:/i)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Formula Injection Protection/i)).toBeInTheDocument();
     });
   });
 

@@ -617,3 +617,58 @@ export interface DistrictDataQualitySummaryResponse {
   district_coverage: DistrictCoverageItem[];
   audit_timestamp: string;
 }
+
+// Phase 12A & 12C CSV Export & Multi-Year Parameter Types
+export interface DistrictTrendsExportParams {
+  district: string;
+  s_no: string;
+  subgroup_type?: string;
+  start_month?: string;
+  end_month?: string;
+  financial_year?: string;
+}
+
+export interface DistrictComparisonExportParams {
+  s_no: string;
+  reporting_month: string;
+  subgroup_type?: string;
+  districts?: string[];
+  financial_year?: string;
+}
+
+// Phase 12B Verified Indicator Registry Types
+export interface IndicatorMappingItem {
+  s_no: string;
+  parameter_name: string;
+  canonical_id: string | null;
+  canonical_name: string | null;
+  category: string | null;
+  unit: string | null;
+  status: 'VERIFIED' | 'PROVISIONAL' | 'UNMAPPED' | string;
+  rationale: string;
+  clinical_definition: string | null;
+  provenance: string;
+  is_stock_metric: boolean;
+  reviewed_at: string;
+}
+
+export interface IndicatorRegistryResponse {
+  total_items: number;
+  verified_count: number;
+  unmapped_count: number;
+  items: IndicatorMappingItem[];
+}
+
+export interface IndicatorAuditReportResponse {
+  total_parameters_observed: number;
+  verified_mappings_count: number;
+  provisional_mappings_count: number;
+  unmapped_parameters_count: number;
+  verified_percentage: number;
+  unmapped_percentage: number;
+  stock_metrics_count: number;
+  verified_mappings: IndicatorMappingItem[];
+  unmapped_indicators_sample: string[];
+  governance_note: string;
+  audit_timestamp: string;
+}
