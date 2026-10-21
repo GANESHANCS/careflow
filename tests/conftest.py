@@ -5,6 +5,12 @@ from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
 from pathlib import Path
+from backend.app.core.config import settings
+
+# Enforce testing environment during test sessions to prevent background thread race conditions
+settings.ENVIRONMENT = "testing"
+settings.ENABLE_IMPORT_WORKER = False
+
 from backend.app.main import app
 from backend.app.db.models.base import Base
 from backend.app.db.models.user import User

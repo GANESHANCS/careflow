@@ -338,12 +338,29 @@ npm run dev
 ```
 * Frontend Application URL: `http://localhost:5173`
 
-### Pre-Seeded Demonstration Accounts
+### Pre-Seeded Demonstration Accounts (Development Mode Only)
 | Username | Password | Role | Permissions |
 | :--- | :--- | :--- | :--- |
-| `admin` | `Password123!` | `ADMIN` | Unrestricted: HMIS uploads, rollbacks, anomaly reviews, facility management |
-| `analyst` | `Password123!` | `ANALYST` | Operational: HMIS uploads, anomaly review status transitions, analytics exports |
-| `viewer` | `Password123!` | `VIEWER` | Read-only: Workspace analytics, observation tables, streaming CSV downloads |
+| `admin` | `careflow_admin_dev_2026` | `ADMIN` | Unrestricted: HMIS uploads, rollbacks, directory watcher scan, anomaly reviews, facility management |
+| `analyst` | `careflow_analyst_dev_2026` | `ANALYST` | Operational: HMIS uploads, anomaly review status transitions, analytics exports |
+| `viewer` | `careflow_viewer_dev_2026` | `VIEWER` | Read-only: Workspace analytics, observation tables, streaming CSV downloads |
+
+### Safe Local Recovery Procedure from Startup Failures
+If ordinary startup failures occur (e.g. port collision or stale background process), **NEVER delete or reset `careflow_dev.db`**. Follow this safe recovery sequence:
+1. **Detect Stale Listening Processes**:
+   ```powershell
+   Get-NetTCPConnection -LocalPort 8000,5173 -ErrorAction SilentlyContinue | Select-Object LocalPort,OwningProcess
+   ```
+2. **Gracefully Terminate Only Stale PIDs**:
+   ```powershell
+   Stop-Process -Id <PID> -Force
+   ```
+3. **Handle SQLite Transient Lock Files**:
+   Ensure no abandoned `-wal` or `-shm` write locks exist, and recheck database integrity:
+   ```powershell
+   python -c "import sqlite3; con = sqlite3.connect('careflow_dev.db'); print(con.execute('PRAGMA integrity_check;').fetchall()); con.close()"
+   ```
+4. **Restart Cleanly**: Relaunch backend and frontend from fresh terminal windows.
 
 ### Clinical Data Architecture & Stream Isolation
 When demonstrating the platform to evaluators, explicitly highlight the structural isolation between data tiers:

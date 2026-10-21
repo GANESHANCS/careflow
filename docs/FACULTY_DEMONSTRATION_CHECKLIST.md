@@ -55,15 +55,15 @@ python -m alembic current
 
 ```powershell
 # 3. Backend Test Suite Execution
-pytest tests/test_phase_17_e2e_integration.py -v
+pytest -q
 ```
-**Expected Output**: `18 passed in ~6.2s`
+**Expected Output**: `246 passed, 4 warnings in ~38s`
 
 ```powershell
 # 4. Frontend Production Test Suite
 cd frontend; npm test -- --run
 ```
-**Expected Output**: `14 passed (14 test files, 79+ passed)`
+**Expected Output**: `14 passed (14 test files, 81 passed in ~7.5s)`
 
 ---
 
@@ -79,10 +79,10 @@ cd frontend; npm test -- --run
 
 ### Stage 2: Authentication & Role-Based Access Control (RBAC)
 * **Goal**: Validate security segregation across administrative roles.
-* **Test Credentials**:
-  * `admin` / `Password123!` (ADMIN: unrestricted)
-  * `analyst` / `Password123!` (ANALYST: operational analysis & ingestion)
-  * `viewer` / `Password123!` (VIEWER: read-only)
+* **Development Demonstration Credentials**:
+  * `admin` / `careflow_admin_dev_2026` (ADMIN: unrestricted administrative & ingestion operations)
+  * `analyst` / `careflow_analyst_dev_2026` (ANALYST: operational analytics, reviews & exports)
+  * `viewer` / `careflow_viewer_dev_2026` (VIEWER: read-only inspection)
 * **Verification Steps**:
   1. Open `http://localhost:5173/login`.
   2. Log in as `viewer`. Notice the header badge indicates `VIEWER Session`.
