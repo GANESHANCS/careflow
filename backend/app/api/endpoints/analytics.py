@@ -145,3 +145,8 @@ def get_data_quality_analytics(
     """
     service = DataQualityAnalyticsService(db)
     return service.get_quality_analytics()
+
+
+from backend.app.api.endpoints import district_analytics
+
+router.include_router(district_analytics.router, prefix="/district", tags=["District HMIS Analytics"])

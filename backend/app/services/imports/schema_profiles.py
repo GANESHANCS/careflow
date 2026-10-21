@@ -134,6 +134,88 @@ class FacilityMonthlyTabularV1Profile(BaseSchemaProfile):
     ]
 
 
+class DistrictMonthlyTabularV1Profile(BaseSchemaProfile):
+    """
+    District-Level Monthly Tabular HMIS Ingestion Profile (v1.0).
+    Matches canonical MoHFW / National Health Mission district-level performance item reports:
+    - Entity columns: District
+    - Item identifiers: S.No., Parameters, Type
+    - Temporal columns: April, May, June, July, August, September, October, November, December, January, February, March
+    - Summary column: Total
+    """
+    profile_id = "district_monthly_tabular_v1"
+    name = "District Monthly Tabular HMIS Profile"
+    version = "1.0.0"
+    description = (
+        "District-level monthly performance tabular profile supporting MoHFW/NHM item-wise reports "
+        "with fiscal-year monthly columns (April-March) and parameter disaggregation slices."
+    )
+    is_synthetic_baseline = False
+
+    FISCAL_MONTHS = [
+        "april", "may", "june", "july", "august", "september",
+        "october", "november", "december", "january", "february", "march"
+    ]
+
+    required_column_groups = [
+        ("District Identifier", ["district", "district_name", "dist_name"]),
+        ("Parameter Code", ["s_no", "sno", "s_no.", "s_n", "item_code", "serial_no"]),
+        ("Parameter Description", ["parameters", "parameter", "indicator", "item_description", "description"]),
+        ("Subgroup / Type", ["type", "subgroup", "subgroup_type", "disaggregation"]),
+    ]
+
+    @classmethod
+    def validate_headers(cls, raw_headers: List[str]) -> SchemaValidationResult:
+        normalized = [HMISSchemaNormalizer.normalize_column_name(h) for h in raw_headers]
+        norm_set = set(normalized)
+
+        errors: List[str] = []
+        warnings: List[str] = []
+        missing_required: List[str] = []
+
+        # 1. Check required structural column groups
+        for group_name, candidates in cls.required_column_groups:
+            matched = any(c in norm_set for c in candidates)
+            if not matched:
+                missing_required.append(f"{group_name} (any of: {', '.join(candidates)})")
+                errors.append(
+                    f"Profile '{cls.profile_id}': Missing required {group_name} column. "
+                    f"Expected one of: [{', '.join(candidates)}]."
+                )
+
+        # 2. Check 12 fiscal month columns
+        missing_months = [m for m in cls.FISCAL_MONTHS if m not in norm_set]
+        if missing_months:
+            missing_required.append(f"Fiscal Months (missing: {', '.join(missing_months)})")
+            errors.append(
+                f"Profile '{cls.profile_id}': Missing required fiscal month column(s): [{', '.join(missing_months)}]."
+            )
+
+        # 3. Check annual total column
+        if "total" not in norm_set:
+            warnings.append(
+                f"Profile '{cls.profile_id}': 'Total' column not detected in headers. "
+                "Annual totals will be computed on ingestion if absent."
+            )
+
+        entity_map = {"district": next((c for c in normalized if c in ["district", "district_name", "dist_name"]), "district")}
+        date_col = "fiscal_months_april_to_march"
+        indicator_cols = ["parameters"]
+
+        is_valid = len(errors) == 0
+        return SchemaValidationResult(
+            is_valid=is_valid,
+            profile_id=cls.profile_id,
+            matched_columns=normalized,
+            missing_required=missing_required,
+            detected_entity_cols=entity_map,
+            detected_date_col=date_col,
+            detected_indicator_cols=indicator_cols,
+            errors=errors,
+            warnings=warnings,
+        )
+
+
 class SchemaProfileRegistry:
     """
     Registry for discovering, selecting, and applying schema validation profiles.
@@ -141,6 +223,7 @@ class SchemaProfileRegistry:
     _PROFILES: Dict[str, type[BaseSchemaProfile]] = {
         MOHFWStandardV2Profile.profile_id: MOHFWStandardV2Profile,
         FacilityMonthlyTabularV1Profile.profile_id: FacilityMonthlyTabularV1Profile,
+        DistrictMonthlyTabularV1Profile.profile_id: DistrictMonthlyTabularV1Profile,
     }
     _DEFAULT_PROFILE = MOHFWStandardV2Profile
 
@@ -156,7 +239,7 @@ class SchemaProfileRegistry:
         Infers the most appropriate profile by testing header compatibility.
         Falls back to MOHFWStandardV2Profile if ambiguous.
         """
-        for profile in [MOHFWStandardV2Profile, FacilityMonthlyTabularV1Profile]:
+        for profile in [MOHFWStandardV2Profile, FacilityMonthlyTabularV1Profile, DistrictMonthlyTabularV1Profile]:
             result = profile.validate_headers(raw_headers)
             if result.is_valid:
                 return profile

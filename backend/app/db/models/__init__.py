@@ -10,6 +10,7 @@ from backend.app.db.models.import_job import ImportJob
 from backend.app.db.models.import_batch import ImportBatch
 from backend.app.db.models.import_error_log import ImportErrorLog
 from backend.app.db.models.import_observation_record import ImportObservationRecord
+from backend.app.db.models.district_observation import DistrictObservation, classify_subgroup_total
 
 __all__ = [
     "Base",
@@ -24,5 +25,7 @@ __all__ = [
     "ImportJob",
     "ImportBatch",
     "ImportErrorLog",
-    "ImportObservationRecord"
+    "ImportObservationRecord",
+    "DistrictObservation",
+    "classify_subgroup_total"
 ]

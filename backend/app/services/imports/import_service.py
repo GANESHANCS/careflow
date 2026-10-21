@@ -15,6 +15,7 @@ from backend.app.db.models.import_observation_record import ImportObservationRec
 from backend.app.db.models.facility import Facility
 from backend.app.db.models.indicator import Indicator
 from backend.app.db.models.observation import Observation
+from backend.app.db.models.district_observation import DistrictObservation
 from backend.app.db.models.data_quality import DataQualityLog
 
 from backend.app.services.data_pipeline.file_inspector import HMISFileInspector
@@ -28,6 +29,7 @@ from backend.app.services.data_pipeline.quality_engine import HMISQualityEngine,
 from backend.app.services.imports.storage import ImportStorageService
 from backend.app.services.imports.validator import ImportValidationError, ImportValidatorService
 from backend.app.services.imports.schema_profiles import SchemaProfileRegistry
+from backend.app.services.imports.district_adapter import DistrictHMISAdapter
 
 logger = logging.getLogger("careflow.imports")
 
@@ -274,6 +276,9 @@ class HMISImportService:
                     message=f"[{detected_profile.name}] {warn}"
                 )
                 self.db.add(err_log)
+
+            if detected_profile.profile_id == "district_monthly_tabular_v1":
+                return self._process_district_import_job(job, file_path, detected_profile)
 
             raw_obs, raw_facs, parse_errors = self._extract_observations_and_facilities(file_path, inspection)
 
@@ -579,6 +584,266 @@ class HMISImportService:
                 return job
             return self._fail_job(job, "IMPORT_PROCESSING_FAILED", f"Processing error: {str(e)}")
 
+    def _process_district_import_job(
+        self, job: ImportJob, file_path: Path, detected_profile: Any
+    ) -> ImportJob:
+        """
+        Specialized ingestion pipeline for district-level monthly tabular HMIS datasets.
+        Preserves original district names, S.No. codes, descriptions, sub-group slices,
+        and arithmetic totals in dedicated DistrictObservation entities.
+        """
+        try:
+            df = pd.read_csv(file_path, low_memory=False)
+            long_records, parse_errors = DistrictHMISAdapter.extract_long_records(
+                df=df,
+                financial_year="2015-16",
+                state="Tamil Nadu",
+                source_file=job.original_filename
+            )
+
+            job.total_records = len(long_records) + len(parse_errors)
+            job.processed_records = len(parse_errors)
+            job.records_rejected = len(parse_errors)
+
+            for err in parse_errors:
+                err_log = ImportErrorLog(
+                    import_job_id=job.id,
+                    source_row=err.get("row"),
+                    error_code=err.get("code", "PARSE_ERROR"),
+                    severity="ERROR",
+                    message=err.get("message", "Error parsing row")
+                )
+                self.db.add(err_log)
+
+            if not long_records:
+                return self._fail_job(job, "EMPTY_DATASET", "File contained no parseable district observation records.")
+
+            if self._is_job_cancelled(job.id):
+                logger.info(f"Import job '{job.job_code}' was cancelled prior to validation. Halting.")
+                self.db.rollback()
+                self.cleanup_partial_import(job)
+                self.db.refresh(job)
+                return job
+
+            job.status = "VALIDATED"
+            job.heartbeat_at = datetime.now(timezone.utc)
+            self.db.commit()
+
+            # Ensure canonical crosswalk indicators exist
+            seen_ind_ids = set()
+            for rec in long_records:
+                ind_id = rec.get("indicator_id")
+                if ind_id and ind_id not in seen_ind_ids:
+                    seen_ind_ids.add(ind_id)
+                    existing_ind = self.db.query(Indicator).filter(Indicator.id == ind_id).first()
+                    if not existing_ind:
+                        code = ind_id.replace("IND_", "")
+                        ind_obj = Indicator(
+                            id=ind_id,
+                            code=code,
+                            name=rec.get("parameter_name", code).replace('_', ' ').title()[:255],
+                            category="District HMIS",
+                            unit="count",
+                            active=True
+                        )
+                        self.db.add(ind_obj)
+            self.db.flush()
+
+            imported_count = 0
+            rejected_count = len(parse_errors)
+            chunk_size = getattr(settings, "IMPORT_CHUNK_SIZE", 500)
+            total_records_count = len(long_records)
+
+            for chunk_start in range(0, total_records_count, chunk_size):
+                if self._is_job_cancelled(job.id):
+                    logger.info(
+                        f"Import job '{job.job_code}' detected cancellation before processing chunk at offset {chunk_start}. "
+                        f"Halting further processing and cleaning up partial state."
+                    )
+                    self.db.rollback()
+                    self.cleanup_partial_import(job)
+                    self.db.refresh(job)
+                    if job.batch_id:
+                        self.update_batch_metrics(job.batch_id)
+                    return job
+
+                chunk = long_records[chunk_start : chunk_start + chunk_size]
+                chunk_ids = [r["id"] for r in chunk]
+                existing_map = {
+                    obs.id: obs for obs in self.db.query(DistrictObservation).filter(DistrictObservation.id.in_(chunk_ids)).all()
+                }
+
+                for rec in chunk:
+                    obs_pk = rec["id"]
+                    val = rec["value"]
+                    val_type = rec["value_type"]
+
+                    existing_obs = existing_map.get(obs_pk)
+
+                    if existing_obs:
+                        will_update = (val is not None or existing_obs.value is None)
+                        is_different = will_update and ((existing_obs.value != val) or (existing_obs.value_type != val_type))
+
+                        if is_different:
+                            change_rec = ImportObservationRecord(
+                                import_job_id=job.id,
+                                observation_id=obs_pk,
+                                action="UPDATE",
+                                previous_value=existing_obs.value,
+                                previous_value_type=existing_obs.value_type,
+                                previous_validation_status=existing_obs.validation_status,
+                                previous_source_file=existing_obs.source_file,
+                                previous_source_sheet=None,
+                                previous_source_row=existing_obs.source_row,
+                                previous_ingested_at=existing_obs.ingested_at,
+                                previous_transformation_version=existing_obs.transformation_version,
+                                previous_import_job_id=existing_obs.last_import_job_id,
+                                new_value=val,
+                                new_value_type=val_type,
+                            )
+                            self.db.add(change_rec)
+                            existing_obs.value = val
+                            existing_obs.value_type = val_type
+                            existing_obs.validation_status = rec["validation_status"]
+                            existing_obs.reported_annual_total = rec["reported_annual_total"]
+                            existing_obs.source_file = job.original_filename
+                            existing_obs.source_row = rec["source_row"]
+                            existing_obs.ingested_at = datetime.now(timezone.utc).isoformat()
+                            existing_obs.last_import_job_id = job.id
+                        else:
+                            change_rec = ImportObservationRecord(
+                                import_job_id=job.id,
+                                observation_id=obs_pk,
+                                action="UNCHANGED",
+                                previous_value=existing_obs.value,
+                                previous_value_type=existing_obs.value_type,
+                                previous_validation_status=existing_obs.validation_status,
+                                previous_source_file=existing_obs.source_file,
+                                previous_source_sheet=None,
+                                previous_source_row=existing_obs.source_row,
+                                previous_ingested_at=existing_obs.ingested_at,
+                                previous_transformation_version=existing_obs.transformation_version,
+                                previous_import_job_id=existing_obs.last_import_job_id,
+                                new_value=existing_obs.value,
+                                new_value_type=existing_obs.value_type,
+                            )
+                            self.db.add(change_rec)
+                    else:
+                        new_obs = DistrictObservation(
+                            id=obs_pk,
+                            state=rec["state"],
+                            district=rec["district"],
+                            s_no=rec["s_no"],
+                            parameter_name=rec["parameter_name"],
+                            subgroup_type=rec["subgroup_type"],
+                            is_subgroup_total=rec["is_subgroup_total"],
+                            indicator_id=rec["indicator_id"],
+                            financial_year=rec["financial_year"],
+                            reporting_month=rec["reporting_month"],
+                            observation_date=rec["observation_date"],
+                            value=val,
+                            value_type=val_type,
+                            validation_status=rec["validation_status"],
+                            reported_annual_total=rec["reported_annual_total"],
+                            source_file=job.original_filename,
+                            source_row=rec["source_row"],
+                            ingested_at=datetime.now(timezone.utc).isoformat(),
+                            transformation_version=rec["transformation_version"],
+                            last_import_job_id=job.id,
+                        )
+                        self.db.add(new_obs)
+                        change_rec = ImportObservationRecord(
+                            import_job_id=job.id,
+                            observation_id=obs_pk,
+                            action="INSERT",
+                            previous_value=None,
+                            previous_value_type=None,
+                            previous_validation_status=None,
+                            previous_source_file=None,
+                            previous_source_sheet=None,
+                            previous_source_row=None,
+                            previous_ingested_at=None,
+                            previous_transformation_version=None,
+                            previous_import_job_id=None,
+                            new_value=val,
+                            new_value_type=val_type,
+                        )
+                        self.db.add(change_rec)
+
+                    imported_count += 1
+
+                if self._is_job_cancelled(job.id):
+                    logger.info(
+                        f"Import job '{job.job_code}' detected cancellation before committing chunk at offset {chunk_start}. "
+                        f"Rolling back uncommitted chunk and cleaning up partial state."
+                    )
+                    self.db.rollback()
+                    self.cleanup_partial_import(job)
+                    self.db.refresh(job)
+                    if job.batch_id:
+                        self.update_batch_metrics(job.batch_id)
+                    return job
+
+                now = datetime.now(timezone.utc)
+                job.processed_records = min(job.total_records, len(parse_errors) + chunk_start + len(chunk))
+                job.records_imported = imported_count
+                job.records_rejected = rejected_count
+                job.heartbeat_at = now
+                job.updated_at = now
+                self.db.commit()
+
+            if self._is_job_cancelled(job.id):
+                logger.info(
+                    f"Import job '{job.job_code}' detected cancellation after chunk loop. "
+                    f"Halting completion and cleaning up partial state."
+                )
+                self.db.rollback()
+                self.cleanup_partial_import(job)
+                self.db.refresh(job)
+                if job.batch_id:
+                    self.update_batch_metrics(job.batch_id)
+                return job
+
+            dq_log = DataQualityLog(
+                id=f"DQ_{job.job_code}",
+                audit_timestamp=datetime.now(timezone.utc).isoformat(),
+                quality_score=100.0 if rejected_count == 0 else max(0.0, round(100.0 - (rejected_count / max(1, job.total_records) * 100), 2)),
+                issue_category="District Import Evaluation",
+                severity="WARNING" if rejected_count > 0 else "INFO",
+                affected_record_count=rejected_count,
+                description=f"District import job '{job.job_code}' processed {imported_count} records with {rejected_count} rejections.",
+                source_file=job.original_filename
+            )
+            self.db.add(dq_log)
+
+            job.processed_records = job.total_records
+            job.records_imported = imported_count
+            job.records_rejected = rejected_count
+            has_errors = (rejected_count > 0 or any(l.severity == "ERROR" for l in job.error_logs))
+            job.status = "COMPLETED_WITH_WARNINGS" if has_errors else "COMPLETED"
+            now = datetime.now(timezone.utc)
+            job.completed_at = now
+            job.updated_at = now
+            job.heartbeat_at = now
+
+            self.db.commit()
+            self.db.refresh(job)
+            if job.batch_id:
+                self.update_batch_metrics(job.batch_id)
+            logger.info(f"District import job {job.job_code} completed successfully with status {job.status}.")
+            return job
+
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(f"District import job {job.job_code} encountered uncaught processing exception: {str(e)}")
+            self.cleanup_partial_import(job)
+            if self._is_job_cancelled(job.id):
+                self.db.refresh(job)
+                if job.batch_id:
+                    self.update_batch_metrics(job.batch_id)
+                return job
+            return self._fail_job(job, "IMPORT_PROCESSING_FAILED", f"Processing error: {str(e)}")
+
     def _fail_job(self, job: ImportJob, error_code: str, message: str) -> ImportJob:
         if self._is_job_cancelled(job.id):
             self.db.refresh(job)
@@ -621,22 +886,38 @@ class HMISImportService:
             )
             for rec in change_records:
                 obs = self.db.query(Observation).filter(Observation.id == rec.observation_id).first()
-                if not obs:
-                    continue
-                if rec.action == "INSERT":
-                    if obs.last_import_job_id == job.id:
-                        self.db.delete(obs)
-                elif rec.action == "UPDATE":
-                    if obs.last_import_job_id == job.id:
-                        obs.value = rec.previous_value
-                        obs.value_type = rec.previous_value_type or "VALID"
-                        obs.validation_status = rec.previous_validation_status or "VALIDATED"
-                        obs.source_file = rec.previous_source_file or ""
-                        obs.source_sheet = rec.previous_source_sheet
-                        obs.source_row = rec.previous_source_row
-                        obs.ingested_at = rec.previous_ingested_at or obs.ingested_at
-                        obs.transformation_version = rec.previous_transformation_version or obs.transformation_version
-                        obs.last_import_job_id = rec.previous_import_job_id
+                if obs:
+                    if rec.action == "INSERT":
+                        if obs.last_import_job_id == job.id:
+                            self.db.delete(obs)
+                    elif rec.action == "UPDATE":
+                        if obs.last_import_job_id == job.id:
+                            obs.value = rec.previous_value
+                            obs.value_type = rec.previous_value_type or "VALID"
+                            obs.validation_status = rec.previous_validation_status or "VALIDATED"
+                            obs.source_file = rec.previous_source_file or ""
+                            obs.source_sheet = rec.previous_source_sheet
+                            obs.source_row = rec.previous_source_row
+                            obs.ingested_at = rec.previous_ingested_at or obs.ingested_at
+                            obs.transformation_version = rec.previous_transformation_version or obs.transformation_version
+                            obs.last_import_job_id = rec.previous_import_job_id
+                else:
+                    dist_obs = self.db.query(DistrictObservation).filter(DistrictObservation.id == rec.observation_id).first()
+                    if dist_obs:
+                        if rec.action == "INSERT":
+                            if dist_obs.last_import_job_id == job.id:
+                                self.db.delete(dist_obs)
+                        elif rec.action == "UPDATE":
+                            if dist_obs.last_import_job_id == job.id:
+                                dist_obs.value = rec.previous_value
+                                dist_obs.value_type = rec.previous_value_type or "VALID"
+                                dist_obs.validation_status = rec.previous_validation_status or "VALIDATED"
+                                dist_obs.source_file = rec.previous_source_file or ""
+                                dist_obs.source_sheet = rec.previous_source_sheet
+                                dist_obs.source_row = rec.previous_source_row
+                                dist_obs.ingested_at = rec.previous_ingested_at or dist_obs.ingested_at
+                                dist_obs.transformation_version = rec.previous_transformation_version or dist_obs.transformation_version
+                                dist_obs.last_import_job_id = rec.previous_import_job_id
 
             # Remove change records associated with the partial execution
             self.db.query(ImportObservationRecord).filter(ImportObservationRecord.import_job_id == job.id).delete()
@@ -882,6 +1163,11 @@ class HMISImportService:
                     if obs:
                         self.db.delete(obs)
                         records_deleted += 1
+                    else:
+                        dist_obs = self.db.query(DistrictObservation).filter(DistrictObservation.id == rec.observation_id).first()
+                        if dist_obs:
+                            self.db.delete(dist_obs)
+                            records_deleted += 1
                 elif rec.action == "UPDATE":
                     obs = self.db.query(Observation).filter(Observation.id == rec.observation_id).first()
                     if obs:
@@ -895,6 +1181,19 @@ class HMISImportService:
                         obs.transformation_version = rec.previous_transformation_version or obs.transformation_version
                         obs.last_import_job_id = rec.previous_import_job_id
                         records_restored += 1
+                    else:
+                        dist_obs = self.db.query(DistrictObservation).filter(DistrictObservation.id == rec.observation_id).first()
+                        if dist_obs:
+                            dist_obs.value = rec.previous_value
+                            dist_obs.value_type = rec.previous_value_type or "VALID"
+                            dist_obs.validation_status = rec.previous_validation_status or "VALIDATED"
+                            dist_obs.source_file = rec.previous_source_file or ""
+                            dist_obs.source_sheet = rec.previous_source_sheet
+                            dist_obs.source_row = rec.previous_source_row
+                            dist_obs.ingested_at = rec.previous_ingested_at or dist_obs.ingested_at
+                            dist_obs.transformation_version = rec.previous_transformation_version or dist_obs.transformation_version
+                            dist_obs.last_import_job_id = rec.previous_import_job_id
+                            records_restored += 1
                 elif rec.action == "UNCHANGED":
                     records_unchanged += 1
 

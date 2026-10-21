@@ -1,0 +1,333 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { DistrictsPage } from './DistrictsPage';
+import { api } from '../api/client';
+import type {
+  DistrictCatalogResponse,
+  DistrictIndicatorCatalogResponse,
+  DistrictMonthlyTrendsResponse,
+  DistrictComparisonResponse,
+  DistrictDataQualitySummaryResponse,
+} from '../api/types';
+
+vi.mock('../api/client', () => ({
+  api: {
+    getDistrictCatalog: vi.fn(),
+    getDistrictIndicators: vi.fn(),
+    getDistrictMonthlyTrends: vi.fn(),
+    getDistrictComparison: vi.fn(),
+    getDistrictQuality: vi.fn(),
+  },
+}));
+
+describe('DistrictsPage Component (Phases 11E & 11F)', () => {
+  const mockCatalog: DistrictCatalogResponse = {
+    districts: ['Ariyalur', 'Chennai', 'Coimbatore'],
+    reporting_periods: [
+      '2015-04',
+      '2015-05',
+      '2015-06',
+      '2015-07',
+      '2015-08',
+      '2015-09',
+      '2015-10',
+      '2015-11',
+      '2015-12',
+      '2016-01',
+      '2016-02',
+      '2016-03',
+    ],
+    financial_years: ['2015-16'],
+    subgroup_types: ['Rural', 'Urban', 'Total'],
+    total_observed_records: 175872,
+    source_name: 'Tamil Nadu State HMIS FY 2015-16',
+    geographic_level: 'District',
+    limitations: ['Official administrative returns', 'Separated from facility observations'],
+  };
+
+  const mockIndicators: DistrictIndicatorCatalogResponse = {
+    total_indicators: 2,
+    mapped_count: 1,
+    unmapped_count: 1,
+    limitations_note: 'Official indicators',
+    indicators: [
+      {
+        s_no: '1.1',
+        parameter_name: 'Total number of pregnant women registered for ANC',
+        available_subgroups: ['Total'],
+        is_stock_metric: false,
+        is_mapped: true,
+        canonical_indicator_id: 'anc_registration_total',
+        canonical_indicator_name: 'ANC Registration Total',
+      },
+      {
+        s_no: '2.1',
+        parameter_name: 'Number of Institutional Deliveries conducted',
+        available_subgroups: ['Rural', 'Urban'],
+        is_stock_metric: false,
+        is_mapped: false,
+        canonical_indicator_id: null,
+        canonical_indicator_name: null,
+      },
+    ],
+  };
+
+  const mockTrends: DistrictMonthlyTrendsResponse = {
+    district: 'Ariyalur',
+    s_no: '1.1',
+    parameter_name: 'Total number of pregnant women registered for ANC',
+    subgroup_type: 'Total',
+    is_subgroup_total: true,
+    is_stock_metric: false,
+    canonical_indicator_id: 'anc_registration_total',
+    canonical_indicator_name: 'ANC Registration Total',
+    annual_total_reported: 12000,
+    calculated_sum: 12000,
+    valid_months_count: 1,
+    zero_months_count: 1,
+    missing_months_count: 1,
+    total_months_count: 3,
+    limitations: 'Monthly values represent discrete reporting periods.',
+    observations: [
+      {
+        id: 'obs-1',
+        reporting_month: '2015-04',
+        observation_date: '2015-04-01',
+        value: 1000,
+        value_type: 'VALID',
+        subgroup_type: 'Total',
+        is_subgroup_total: true,
+        reported_annual_total: 12000,
+        source_file: 'hmis-item-rpt-tn-for-2015-16.csv',
+        source_row: 42,
+        transformation_version: 'v1.0',
+        last_import_job_id: 3,
+      },
+      {
+        id: 'obs-2',
+        reporting_month: '2015-05',
+        observation_date: '2015-05-01',
+        value: 0,
+        value_type: 'ZERO',
+        subgroup_type: 'Total',
+        is_subgroup_total: true,
+        reported_annual_total: 12000,
+        source_file: 'hmis-item-rpt-tn-for-2015-16.csv',
+        source_row: 42,
+        transformation_version: 'v1.0',
+        last_import_job_id: 3,
+      },
+      {
+        id: 'obs-3',
+        reporting_month: '2015-06',
+        observation_date: '2015-06-01',
+        value: null,
+        value_type: 'MISSING',
+        subgroup_type: 'Total',
+        is_subgroup_total: true,
+        reported_annual_total: 12000,
+        source_file: 'hmis-item-rpt-tn-for-2015-16.csv',
+        source_row: 42,
+        transformation_version: 'v1.0',
+        last_import_job_id: 3,
+      },
+    ],
+  };
+
+  const mockComparison: DistrictComparisonResponse = {
+    s_no: '1.1',
+    parameter_name: 'Total number of pregnant women registered for ANC',
+    reporting_month: '2015-04',
+    subgroup_type: 'Total',
+    is_subgroup_total: true,
+    is_stock_metric: false,
+    total_districts: 3,
+    reporting_districts: 2,
+    state_mean: 1500,
+    state_median: 1200,
+    state_total: 3500,
+    data_note: 'Comparisons represent discrete reporting activity.',
+    items: [
+      { district: 'Ariyalur', value: 1000, value_type: 'VALID', reported_annual_total: 12000, rank: 2 },
+      { district: 'Chennai', value: 2500, value_type: 'VALID', reported_annual_total: 30000, rank: 1 },
+      { district: 'Coimbatore', value: null, value_type: 'MISSING', reported_annual_total: null, rank: null },
+    ],
+  };
+
+  const mockQuality: DistrictDataQualitySummaryResponse = {
+    total_records: 175872,
+    value_counts: {
+      VALID: 140000,
+      ZERO: 25000,
+      MISSING: 10872,
+    },
+    subgroup_totals_count: 50000,
+    subgroup_slices_count: 125872,
+    non_additive_stock_rows: 1200,
+    districts_count: 31,
+    parameters_count: 150,
+    import_job: {
+      id: 3,
+      job_code: 'JOB_20261021_124025_eb4fc9',
+      original_filename: 'data/raw/hmis_public_source/hmis-item-rpt-tn-for-2015-16.csv',
+      status: 'COMPLETED',
+      total_records: 14656,
+      records_imported: 14656,
+      records_rejected: 0,
+      completed_at: '2026-10-21T12:40:48Z',
+      schema_profile: 'district_monthly_tabular_v1',
+    },
+    district_coverage: [
+      {
+        district: 'Ariyalur',
+        total_records: 5673,
+        valid_records: 5000,
+        zero_records: 500,
+        missing_records: 173,
+        completeness_pct: 96.95,
+      },
+    ],
+    audit_timestamp: '2026-10-21T12:41:00Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getDistrictCatalog).mockResolvedValue(mockCatalog);
+    vi.mocked(api.getDistrictIndicators).mockResolvedValue(mockIndicators);
+    vi.mocked(api.getDistrictMonthlyTrends).mockResolvedValue(mockTrends);
+    vi.mocked(api.getDistrictComparison).mockResolvedValue(mockComparison);
+    vi.mocked(api.getDistrictQuality).mockResolvedValue(mockQuality);
+  });
+
+  it('renders district workspace header with official data separation callout', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/District Healthcare Analytics & Provenance/i)).toBeInTheDocument();
+      expect(screen.getByText(/Official State HMIS Returns/i)).toBeInTheDocument();
+      expect(screen.getByText(/Data Architecture Separation/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ariyalur District/i)).toBeInTheDocument();
+    });
+  });
+
+  it('populates filter dropdowns with catalog districts, indicators, and periods', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Select district/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Select HMIS Indicator/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Select comparison reporting period/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Select subgroup slice/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders monthly trend chart with zero vs missing indicators', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/12-Month Time-Series Movement/i)).toBeInTheDocument();
+      expect(screen.getByText(/Valid: 1/i)).toBeInTheDocument();
+      expect(screen.getByText(/Zero: 1/i)).toBeInTheDocument();
+      expect(screen.getByText(/Missing: 1/i)).toBeInTheDocument();
+    });
+  });
+
+  it('switches to District Comparison tab and renders comparative horizontal bars', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Monthly Trends/i)).toBeInTheDocument();
+    });
+
+    const compareTab = screen.getByRole('button', { name: /District Comparison/i });
+    fireEvent.click(compareTab);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cross-District Comparison — 2015-04/i)).toBeInTheDocument();
+      expect(screen.getByText(/Districts Reporting/i)).toBeInTheDocument();
+      expect(screen.getByText(/District Mean/i)).toBeInTheDocument();
+      expect(screen.getAllByText('Chennai').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Coimbatore').length).toBeGreaterThan(0);
+      expect(screen.getByText(/Missing \/ Not Reported/i)).toBeInTheDocument();
+    });
+  });
+
+  it('switches to Observation Records tab and renders raw observation records', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Observation Records/i)).toBeInTheDocument();
+    });
+
+    const tableTab = screen.getByRole('button', { name: /Observation Records/i });
+    fireEvent.click(tableTab);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Raw Observation Record Log/i)).toBeInTheDocument();
+      expect(screen.getAllByText('2015-04').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('2015-05').length).toBeGreaterThan(0);
+      expect(screen.getByText(/Zero Activity \(0\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Missing \/ Absent/i)).toBeInTheDocument();
+    });
+  });
+
+  it('switches to Quality & Provenance tab and displays Phase 11F audit metrics', async () => {
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Quality & Provenance/i)).toBeInTheDocument();
+    });
+
+    const qualityTab = screen.getByRole('button', { name: /Quality & Provenance/i });
+    fireEvent.click(qualityTab);
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/1.*75.*872/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Total Ingested Records/i)).toBeInTheDocument();
+      expect(screen.getByText(/Explicit Zeroes \(0\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Import Pipeline Execution Traceability/i)).toBeInTheDocument();
+      expect(screen.getByText(/JOB_20261021_124025_eb4fc9/i)).toBeInTheDocument();
+      expect(screen.getByText(/Zero State Integrity/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders error state if the catalog API call fails', async () => {
+    vi.mocked(api.getDistrictCatalog).mockRejectedValue(new Error('Connection Refused to District Service'));
+
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/District Analytics Catalog Offline/i)).toBeInTheDocument();
+      expect(screen.getByText(/Connection Refused to District Service/i)).toBeInTheDocument();
+    });
+  });
+});

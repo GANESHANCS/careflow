@@ -12,6 +12,7 @@ const FacilityDetailPage = lazy(() => import('../pages/FacilityDetailPage').then
 const RegionsPage = lazy(() => import('../pages/RegionsPage').then(m => ({ default: m.RegionsPage })));
 const ForecastPage = lazy(() => import('../pages/ForecastPage').then(m => ({ default: m.ForecastPage })));
 const DataQualityPage = lazy(() => import('../pages/DataQualityPage').then(m => ({ default: m.DataQualityPage })));
+const DistrictsPage = lazy(() => import('../pages/DistrictsPage').then(m => ({ default: m.DistrictsPage })));
 const ImportPage = lazy(() => import('../pages/ImportPage').then(m => ({ default: m.ImportPage })));
 
 const PageFallback: React.FC = () => (
@@ -65,6 +66,14 @@ export const AppRoutes: React.FC = () => {
             element={
               <ProtectedRoute>
                 <RegionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="districts"
+            element={
+              <ProtectedRoute>
+                <DistrictsPage />
               </ProtectedRoute>
             }
           />

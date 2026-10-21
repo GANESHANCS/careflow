@@ -25,6 +25,11 @@ import type {
   ImportBatchListResponse,
   DirectoryScanTriggerResponse,
   ImportBatchRetryResponse,
+  DistrictCatalogResponse,
+  DistrictIndicatorCatalogResponse,
+  DistrictMonthlyTrendsResponse,
+  DistrictComparisonResponse,
+  DistrictDataQualitySummaryResponse,
 } from './types';
 
 const API_BASE_URL = '/api';
@@ -337,5 +342,50 @@ export const api = {
         'Content-Type': 'application/json',
       },
     });
+  },
+
+  // District HMIS Analytics (Phases 11D-11G)
+  getDistrictCatalog: (): Promise<DistrictCatalogResponse> => {
+    return fetchJson<DistrictCatalogResponse>('/analytics/district/catalog');
+  },
+
+  getDistrictIndicators: (): Promise<DistrictIndicatorCatalogResponse> => {
+    return fetchJson<DistrictIndicatorCatalogResponse>('/analytics/district/indicators');
+  },
+
+  getDistrictMonthlyTrends: (params: {
+    district: string;
+    s_no: string;
+    subgroup_type?: string;
+    start_month?: string;
+    end_month?: string;
+  }): Promise<DistrictMonthlyTrendsResponse> => {
+    const query = new URLSearchParams();
+    query.append('district', params.district);
+    query.append('s_no', params.s_no);
+    if (params.subgroup_type) query.append('subgroup_type', params.subgroup_type);
+    if (params.start_month) query.append('start_month', params.start_month);
+    if (params.end_month) query.append('end_month', params.end_month);
+    return fetchJson<DistrictMonthlyTrendsResponse>(`/analytics/district/trends?${query.toString()}`);
+  },
+
+  getDistrictComparison: (params: {
+    s_no: string;
+    reporting_month: string;
+    subgroup_type?: string;
+    districts?: string[];
+  }): Promise<DistrictComparisonResponse> => {
+    const query = new URLSearchParams();
+    query.append('s_no', params.s_no);
+    query.append('reporting_month', params.reporting_month);
+    if (params.subgroup_type) query.append('subgroup_type', params.subgroup_type);
+    if (params.districts && params.districts.length > 0) {
+      params.districts.forEach(d => query.append('districts', d));
+    }
+    return fetchJson<DistrictComparisonResponse>(`/analytics/district/compare?${query.toString()}`);
+  },
+
+  getDistrictQuality: (): Promise<DistrictDataQualitySummaryResponse> => {
+    return fetchJson<DistrictDataQualitySummaryResponse>('/analytics/district/quality');
   },
 };

@@ -1,0 +1,6 @@
+State,District,Facility Code,Facility Name,Reporting Month,OPD Attendance,Inpatient Admissions,Institutional Deliveries,Antenatal Visits
+StateAlpha,District1,FAC_101,Community Health Centre Alpha,2024-04,450,60,25,30
+StateAlpha,District1,FAC_102,Primary Health Centre Beta,2024-04,180,0,12,18
+StateAlpha,District1,FAC_103,District Hospital Gamma,2024-04,1250,340,85,210
+StateAlpha,District1,FAC_101,Community Health Centre Alpha,2024-05,490,65,28,35
+StateAlpha,District1,FAC_102,Primary Health Centre Beta,2024-05,210,0,15,22

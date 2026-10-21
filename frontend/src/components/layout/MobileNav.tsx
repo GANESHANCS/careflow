@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { clsx } from 'clsx';
-import { LayoutDashboard, Building2, Map, TrendingUp, ShieldCheck, UploadCloud, X, LogOut, LogIn } from 'lucide-react';
+import { LayoutDashboard, Building2, Map, MapPin, TrendingUp, ShieldCheck, UploadCloud, X, LogOut, LogIn } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 
 export interface MobileNavProps {
@@ -26,6 +26,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onClose }) => {
     { label: 'Overview', path: '/overview', icon: LayoutDashboard },
     { label: 'Facilities', path: '/facilities', icon: Building2 },
     { label: 'Regions', path: '/regions', icon: Map },
+    { label: 'Districts', path: '/districts', icon: MapPin },
     { label: 'Forecast', path: '/forecast', icon: TrendingUp },
     { label: 'Data Quality', path: '/data-quality', icon: ShieldCheck },
     { label: 'Imports', path: '/imports', icon: UploadCloud },

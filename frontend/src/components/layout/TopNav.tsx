@@ -47,6 +47,7 @@ export const TopNav: React.FC<TopNavProps> = ({ onMobileMenuToggle, isMobileMenu
     { label: 'Overview', path: '/overview' },
     { label: 'Facilities', path: '/facilities' },
     { label: 'Regions', path: '/regions' },
+    { label: 'Districts', path: '/districts' },
     { label: 'Forecast', path: '/forecast' },
     { label: 'Data Quality', path: '/data-quality' },
     { label: 'Imports', path: '/imports' },

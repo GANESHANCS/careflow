@@ -496,3 +496,124 @@ export interface ImportErrorLogListResponse {
   page: number;
   page_size: number;
 }
+
+// District HMIS Analytics Type Definitions (Phases 11D-11G)
+
+export interface DistrictCatalogResponse {
+  districts: string[];
+  reporting_periods: string[];
+  financial_years: string[];
+  subgroup_types: string[];
+  total_observed_records: number;
+  source_name: string;
+  geographic_level: string;
+  limitations: string[];
+}
+
+export interface DistrictIndicatorItem {
+  s_no: string;
+  parameter_name: string;
+  available_subgroups: string[];
+  is_stock_metric: boolean;
+  is_mapped: boolean;
+  canonical_indicator_id: string | null;
+  canonical_indicator_name: string | null;
+}
+
+export interface DistrictIndicatorCatalogResponse {
+  total_indicators: number;
+  mapped_count: number;
+  unmapped_count: number;
+  indicators: DistrictIndicatorItem[];
+  limitations_note: string;
+}
+
+export interface DistrictTrendObservation {
+  id: string;
+  reporting_month: string;
+  observation_date: string;
+  value: number | null;
+  value_type: 'VALID' | 'ZERO' | 'MISSING' | 'INVALID' | string;
+  subgroup_type: string;
+  is_subgroup_total: boolean;
+  reported_annual_total: number | null;
+  source_file: string;
+  source_row: number | null;
+  transformation_version: string;
+  last_import_job_id: number | null;
+}
+
+export interface DistrictMonthlyTrendsResponse {
+  district: string;
+  s_no: string;
+  parameter_name: string;
+  subgroup_type: string;
+  is_subgroup_total: boolean;
+  is_stock_metric: boolean;
+  canonical_indicator_id: string | null;
+  canonical_indicator_name: string | null;
+  annual_total_reported: number | null;
+  calculated_sum: number | null;
+  valid_months_count: number;
+  zero_months_count: number;
+  missing_months_count: number;
+  total_months_count: number;
+  observations: DistrictTrendObservation[];
+  limitations: string;
+}
+
+export interface DistrictComparisonItem {
+  district: string;
+  value: number | null;
+  value_type: string;
+  reported_annual_total: number | null;
+  rank: number | null;
+}
+
+export interface DistrictComparisonResponse {
+  s_no: string;
+  parameter_name: string;
+  reporting_month: string;
+  subgroup_type: string;
+  is_subgroup_total: boolean;
+  is_stock_metric: boolean;
+  total_districts: number;
+  reporting_districts: number;
+  state_mean: number | null;
+  state_median: number | null;
+  state_total: number | null;
+  items: DistrictComparisonItem[];
+  data_note: string;
+}
+
+export interface DistrictCoverageItem {
+  district: string;
+  total_records: number;
+  valid_records: number;
+  zero_records: number;
+  missing_records: number;
+  completeness_pct: number;
+}
+
+export interface DistrictDataQualitySummaryResponse {
+  total_records: number;
+  value_counts: Record<string, number>;
+  subgroup_totals_count: number;
+  subgroup_slices_count: number;
+  non_additive_stock_rows: number;
+  districts_count: number;
+  parameters_count: number;
+  import_job: {
+    id: number;
+    job_code: string;
+    original_filename: string;
+    status: string;
+    total_records: number;
+    records_imported: number;
+    records_rejected: number;
+    completed_at: string | null;
+    schema_profile: string;
+  } | null;
+  district_coverage: DistrictCoverageItem[];
+  audit_timestamp: string;
+}
