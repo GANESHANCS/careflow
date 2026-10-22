@@ -105,7 +105,24 @@ class Settings(BaseSettings):
                     "CRITICAL PRODUCTION CONFIGURATION ERROR: ENVIRONMENT='production' cannot use SQLite. "
                     "Provide a valid PostgreSQL DATABASE_URL."
                 )
+            # Enforce non-wildcard CORS in production
+            if "*" in self.CORS_ORIGINS:
+                raise ValueError(
+                    "CRITICAL PRODUCTION CONFIGURATION ERROR: ENVIRONMENT='production' cannot use wildcard '*' in CORS_ORIGINS when credentials are enabled. Specify explicit domain origins."
+                )
         return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower().strip() == "production"
+
+    @property
+    def canonical_database_type(self) -> str:
+        if self.DATABASE_URL.startswith("sqlite"):
+            return "sqlite"
+        elif "postgres" in self.DATABASE_URL:
+            return "postgresql"
+        return "other"
 
     model_config = SettingsConfigDict(
         case_sensitive=True,

@@ -84,3 +84,29 @@ def test_postgresql_engine_construction_without_live_server():
     assert engine.dialect.name == "postgresql"
     assert engine.dialect.driver == "psycopg"
     assert "psycopg" in engine.dialect.dbapi.__name__
+
+
+def test_production_config_rejects_wildcard_cors():
+    valid_secure_secret = "a_very_secure_random_production_secret_key_1234567890_abcdef"
+    with pytest.raises(ValueError, match="cannot use wildcard '\\*' in CORS_ORIGINS"):
+        Settings(
+            ENVIRONMENT="production",
+            SECRET_KEY=valid_secure_secret,
+            DATABASE_URL="postgresql://user:pass@localhost:5432/careflow_prod",
+            CORS_ORIGINS=["*"]
+        )
+
+
+def test_environment_helper_properties():
+    dev_config = Settings(ENVIRONMENT="development", DATABASE_URL="sqlite:///./careflow_dev.db")
+    assert dev_config.is_production is False
+    assert dev_config.canonical_database_type == "sqlite"
+
+    valid_secure_secret = "a_very_secure_random_production_secret_key_1234567890_abcdef"
+    prod_config = Settings(
+        ENVIRONMENT="production",
+        SECRET_KEY=valid_secure_secret,
+        DATABASE_URL="postgresql://user:pass@localhost:5432/careflow_prod"
+    )
+    assert prod_config.is_production is True
+    assert prod_config.canonical_database_type == "postgresql"

@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 15 — MULTI-YEAR HMIS DATA INTEGRATION & ANOMALY REVIEW WORKFLOW (COMPLETE & VERIFIED)
+## Current Phase: PHASE 16 — PRODUCTION READINESS, SECURITY HARDENING & OPERATIONAL RELIABILITY (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -36,6 +36,7 @@
 - **PHASE 13 (Indicator Audit, Ambiguity Classifications & Export Subgroup Fix)**: Complete & Verified.
 - **PHASE 14 (Healthcare Intelligence, Forecasting Foundation & Early-Warning Analytics)**: Complete & Verified.
 - **PHASE 15 (Multi-Year HMIS Data Integration & Anomaly Review Workflow)**: Complete & Verified.
+- **PHASE 16 (Production Readiness, Security Hardening & Operational Reliability)**: Complete & Verified.
 
 ---
 
@@ -50,10 +51,10 @@
 
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
-| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **218/218 passed** (Phases 1–15 full suites passing without failures, 12 new Phase 15 tests) |
+| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **228/228 passed** (Phases 1–16 full suites passing without failures, 10 new Phase 16 tests) |
 | **Full Vitest Frontend Suite** | `npm test -- --run` (in `frontend/`) | **PASSED** | **79/79 passed** (All 14 test files passing across Landing, Overview, Facilities, Forecast, Imports, and Districts intelligence tabs) |
 | **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React 19 + TypeScript + Vite build succeeded with **0 errors, 0 warnings** |
-| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 13 original tables (175,872 district_observations, 362 observations) |
+| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 15 tables (175,872 district_observations, 362 observations) |
 | **Git Diff Format & Hygiene** | `git diff --check` | **PASSED** | Exit code 0 (zero trailing whitespace, zero formatting anomalies) |
 
 ---
@@ -284,3 +285,45 @@
      * Interactive Anomaly Review modal allowing review state transitions, note additions, and audit history inspection.
    * `frontend/src/api/client.ts` & `frontend/src/api/types.ts`: API clients and type definitions for Phase 15 endpoints.
    * `frontend/src/pages/DistrictsPage.test.tsx`: Extended tests to mock all Phase 15 client calls cleanly.
+
+---
+
+## Phase 16 Deliverables (Production Readiness, Security Hardening & Operational Reliability)
+
+1. **Database Path Audit & Canonical Resolution (Critical Safety Requirement)**:
+   * **Audit Findings**: The application configuration (`Settings.DATABASE_URL` default `"sqlite:///./careflow_dev.db"`) resolves relative to the project root when launched from `D:\careflow`, targeting `D:\careflow\careflow_dev.db`.
+   * **Deleted File Investigation**: Confirmed that `data\careflow_dev.db` was an empty 0-byte artifact created when an inline CLI scratch command connected to `data/careflow_dev.db` during Phase 15 testing. The file was immediately removed, and no application data was lost.
+   * **Integrity & Row Preservation**: Active database `careflow_dev.db` verified with `PRAGMA integrity_check` = `ok`. All 175,872 district observations, 362 facility observations, 108 forecasts, and 351,764 rollback change-log records remain 100% intact.
+   * **Pre-Audit Backup**: Created and verified atomic online backup at `data/backups/careflow_dev_backup_phase16_preaudit.db` (213,311,488 bytes).
+
+2. **Production Security & Configuration Hardening (Phase 16A)**:
+   * `backend/app/core/config.py`: Hardened `validate_environment_and_security()`:
+     * Mandates $\ge 32$-character non-default `SECRET_KEY` in production.
+     * Enforces PostgreSQL and strictly rejects SQLite in production.
+     * Enforces explicit production domain origins and strictly rejects wildcard `*` in `CORS_ORIGINS` when credentials are enabled.
+     * Added `is_production` and `canonical_database_type` helper properties.
+   * `backend/app/core/middleware.py`: Global exception handler sanitizes uncaught 500 exceptions into a uniform `INTERNAL_SERVER_ERROR` contract with request ID propagation (`X-Request-ID`), preventing disclosure of database queries, stack traces, or local filesystem paths.
+
+3. **System Health & Orchestrator Probes (Phase 16A)**:
+   * `backend/app/api/endpoints/health.py`:
+     * `GET /api/health`: Public system health probe with real database connectivity check (`SELECT 1`), returning 200 when healthy or 503 when disconnected, without disclosing connection credentials or internal driver details.
+     * `GET /api/healthz`: High-frequency liveness probe returning HTTP 200 alive without database dependency.
+     * `GET /api/readyz`: Deep readiness probe verifying database connectivity and returning HTTP 503 if unreachable.
+
+4. **Authentication & Granular RBAC Verification (Phase 16B)**:
+   * Audited all protected operational routes: unauthenticated, expired, or corrupted JWT tokens are rejected with HTTP 401 Unauthorized across all endpoints.
+   * Granular role permissions verified:
+     * `ADMIN`: Full access to upload, view, rollback, retry, directory scan, and anomaly reviews.
+     * `ANALYST`: Authorized for file upload, analytics viewing, and anomaly review state transitions; prohibited from rollback (403), directory scan triggers (403), or batch cancellation (403).
+     * `VIEWER`: Restricted to read-only views; prohibited from file uploads (403), rollback (403), and anomaly review actions (403).
+   * Abuse protection: Sliding-window rate limiter protects authentication endpoints (`InMemoryRateLimiter`).
+
+5. **Operational Reliability & Ingestion Workers (Phase 16D)**:
+   * In-process background worker (`HMISImportWorkerThread`) verified with singleton lock preventing duplicate thread spawns on server reload.
+   * Atomic job claiming (`claim_job()`) and heartbeat tracking (`heartbeat_at`) preventing worker race conditions.
+   * Automatic crash recovery: identifies stale jobs exceeding `WORKER_STALE_TIMEOUT_SECONDS` (300s) and safely resets them for re-execution up to `WORKER_MAX_RETRIES` (3).
+   * Rollback dependency conflict protection: detects subsequent active imports modifying the same observations and safely returns `HTTP 409 Conflict`.
+
+6. **Operational Documentation & Runbooks (Phase 16F)**:
+   * `docs/DEPLOYMENT_RUNBOOK.md`: Added Section 8 (Database Architecture & Canonical Path Selection), Section 9 (Backup Verification & Integrity Audit Procedures), and Section 10 (HMIS Import Recovery & Operational Troubleshooting).
+   * Zero secret values, credentials, or private environmental keys committed.

@@ -226,3 +226,72 @@ If a deployment failure or unexpected defect is detected in a new release:
    ```bash
    curl -I https://careflow.gov.in/api/health
    ```
+
+---
+
+## 8. Database Architecture & Canonical Path Selection
+
+### Canonical Development Database Path
+* **Canonical Path**: `D:\careflow\careflow_dev.db` (located at workspace root).
+* **Connection String**: `sqlite:///./careflow_dev.db`.
+* **Path Resolution Rationale**: In Python SQLite URIs, `./careflow_dev.db` resolves relative to the current working directory of the application process. When launched from the repository root (`D:\careflow`), it directly binds to `D:\careflow\careflow_dev.db`.
+* **Path Audit Note**: The `data/` directory contains subdirectories for `raw/`, `interim/`, `processed/`, `uploads/`, and `backups/`. Standalone SQLite `.db` files should not be manually created inside `data/` without explicit configuration to prevent path confusion.
+
+### Production PostgreSQL Architecture
+In production (`ENVIRONMENT="production"`), SQLite is strictly prohibited by configuration validation (`validate_environment_and_security`). All persistent storage must use a production PostgreSQL cluster running with connection pooling parameters:
+* `DB_POOL_SIZE`: 10–20 connections
+* `DB_MAX_OVERFLOW`: 20–40 connections
+* `DB_POOL_RECYCLE`: 1800 seconds (30 minutes)
+* Connection driver: Psycopg v3 (`postgresql+psycopg://`)
+
+---
+
+## 9. Backup Verification & Integrity Audit Procedures
+
+Before any persistent data transformation or database migration, an atomic backup must be captured and verified.
+
+### SQLite Online Backup Procedure (Development / Staging)
+To avoid database locks during live reads, utilize SQLite's native streaming backup API:
+```bash
+python -c "
+import sqlite3, os
+src = 'careflow_dev.db'
+dst = 'data/backups/careflow_dev_backup_' + os.popen('date /t').read().strip().replace('/', '') + '.db'
+src_conn = sqlite3.connect(f'file:{src}?mode=ro', uri=True)
+dst_conn = sqlite3.connect(dst)
+src_conn.backup(dst_conn)
+dst_conn.close(); src_conn.close()
+ver_conn = sqlite3.connect(f'file:{dst}?mode=ro', uri=True)
+print('Integrity:', ver_conn.execute('PRAGMA integrity_check;').fetchall())
+print('District Observations:', ver_conn.execute('SELECT COUNT(*) FROM district_observations;').fetchone()[0])
+ver_conn.close()
+"
+```
+
+### PostgreSQL Verification Procedure (Production)
+```bash
+# 1. Capture snapshot
+pg_dump -U careflow_prod_user -d careflow_prod_db -F c -b -v -f /var/backups/careflow/careflow_pre_migration.dump
+
+# 2. Verify dump integrity
+pg_restore -l /var/backups/careflow/careflow_pre_migration.dump > /dev/null
+echo \"Backup catalog verification exit code: $?\"
+```
+
+---
+
+## 10. HMIS Import Recovery & Operational Troubleshooting
+
+### Ingestion Worker Stalls & Crash Recovery
+* **Stale Timeout**: The background worker polls for jobs in status `PROCESSING` whose `heartbeat_at` has not been updated within `WORKER_STALE_TIMEOUT_SECONDS` (default: 300 seconds).
+* **Automatic Re-queueing**: Stale jobs are automatically cleaned up and re-queued up to `WORKER_MAX_RETRIES` (default: 3).
+* **Manual Job Re-queue**: Administrators can manually retry failed or stalled jobs via:
+  ```bash
+  curl -X POST http://localhost:8000/api/imports/{job_code}/retry \
+    -H \"Authorization: Bearer <ADMIN_JWT_TOKEN>\"
+  ```
+
+### Rollback Dependency Conflict (HTTP 409)
+* When an administrator requests a rollback of an import job (`POST /api/imports/{job_code}/rollback`), CAREFlow verifies whether subsequent completed imports modified the same observation rows.
+* If a dependent subsequent job exists, the rollback is rejected with `HTTP 409 Conflict` to prevent overwriting more recent valid data.
+* **Resolution**: Roll back the subsequent dependent job first, and then roll back the target historical job.
