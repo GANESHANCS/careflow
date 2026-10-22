@@ -10,6 +10,8 @@ from backend.app.db.models.indicator import Indicator
 
 class MappingStatus(str, Enum):
     VERIFIED = "VERIFIED"
+    AMBIGUOUS = "AMBIGUOUS"
+    UNVERIFIED = "UNVERIFIED"
     PROVISIONAL = "PROVISIONAL"
     UNMAPPED = "UNMAPPED"
 
@@ -150,14 +152,18 @@ class IndicatorMappingRegistry:
         },
         "14.10.1.c": {
             "canonical_id": "IND_inpatient_admissions",
-            "canonical_name": "Inpatient Admissions (IPD)",
+            "canonical_name": "Inpatient Admissions (IPD) [Disaggregated Slices]",
             "category": "Inpatient Services",
             "unit": "admissions",
-            "status": MappingStatus.VERIFIED,
+            "status": MappingStatus.AMBIGUOUS,
             "rationale": (
-                "Direct clinical equivalent to MoHFW HMIS Item 14.10.1.c: Total Inpatient admissions (IPD) across male and female wards."
+                "MoHFW Item 14.10.1.c represents total inpatient admissions (sum of items 14.10.1.a & 14.10.1.b), "
+                "but in official state returns it is partitioned into demographic age slices ('1. Children' and '2. Adults') "
+                "without an authoritative unified TOTAL row (is_subgroup_total=False). Unqualified mapping to canonical "
+                "IND_inpatient_admissions is AMBIGUOUS because queries defaulting to first available subgroup capture only "
+                "pediatric admissions and exclude adult patients."
             ),
-            "clinical_definition": "Total count of formal patient admissions requiring overnight hospitalization or bed occupancy.",
+            "clinical_definition": "Admissions requiring overnight hospitalization; classified as AMBIGUOUS due to absence of unified aggregate total in raw source returns.",
             "provenance": "MoHFW HMIS Operational Guidelines (Facility Services Section 14.10)",
         },
         "14.12.1": {
@@ -261,6 +267,7 @@ class IndicatorMappingRegistry:
         total_parameters = len(distinct_snos)
 
         verified_records: List[Dict[str, Any]] = []
+        ambiguous_records: List[Dict[str, Any]] = []
         unmapped_snos: List[str] = []
         stock_metric_snos: List[str] = []
 
@@ -268,6 +275,8 @@ class IndicatorMappingRegistry:
             rec = cls.get_mapping(s_no)
             if rec.status == MappingStatus.VERIFIED:
                 verified_records.append(rec.to_dict())
+            elif rec.status == MappingStatus.AMBIGUOUS:
+                ambiguous_records.append(rec.to_dict())
             else:
                 unmapped_snos.append(s_no)
 
@@ -277,16 +286,19 @@ class IndicatorMappingRegistry:
         return {
             "total_parameters_observed": total_parameters,
             "verified_mappings_count": len(verified_records),
+            "ambiguous_mappings_count": len(ambiguous_records),
             "provisional_mappings_count": 0,
             "unmapped_parameters_count": len(unmapped_snos),
             "verified_percentage": round((len(verified_records) / max(1, total_parameters)) * 100, 2),
             "unmapped_percentage": round((len(unmapped_snos) / max(1, total_parameters)) * 100, 2),
             "stock_metrics_count": len(stock_metric_snos),
             "verified_mappings": verified_records,
+            "ambiguous_mappings": ambiguous_records,
             "unmapped_indicators_sample": unmapped_snos[:15],
             "governance_note": (
                 "Indicator mappings follow strict non-fabrication safety rules. Indicators without direct "
-                "authoritative equivalence in MoHFW standard definitions are preserved verbatim as unmapped."
+                "authoritative equivalence in MoHFW standard definitions are preserved verbatim as unmapped, "
+                "and indicators lacking a single aggregate total (such as 14.10.1.c) are classified as AMBIGUOUS."
             ),
             "audit_timestamp": datetime.now(timezone.utc).isoformat(),
         }

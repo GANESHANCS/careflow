@@ -147,8 +147,27 @@ class DistrictExportService:
         Streams cross-district comparison observations as RFC 4180 compliant CSV.
         Includes state mean, median, and district rankings.
         """
+        # Resolve subgroup_type if not specified to prevent mixed-subgroup duplicate ranking
+        if not subgroup_type:
+            avail = [
+                r[0] for r in self.db.query(DistrictObservation.subgroup_type)
+                .filter(
+                    func.lower(DistrictObservation.s_no) == s_no.lower().strip(),
+                    DistrictObservation.reporting_month == reporting_month.strip()
+                )
+                .distinct().all()
+            ]
+            if avail:
+                for preferred in ["TOTAL", "Total", "4. Total", "3. Total"]:
+                    if preferred in avail:
+                        subgroup_type = preferred
+                        break
+                if not subgroup_type:
+                    subgroup_type = avail[0]
+
+        resolved_sg = subgroup_type or "All"
         yield f"# CAREFlow India — Cross-District HMIS Comparison Export\n"
-        yield f"# Indicator S.No: {s_no} | Reporting Period: {reporting_month}\n"
+        yield f"# Indicator S.No: {s_no} | Reporting Period: {reporting_month} | Subgroup: {resolved_sg}\n"
         yield f"# Note: Cross-district comparisons display raw counts; variations reflect geographic scale and population size.\n"
 
         headers = [

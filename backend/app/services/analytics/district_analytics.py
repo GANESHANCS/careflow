@@ -121,7 +121,8 @@ class DistrictAnalyticsService:
                     is_stock_metric=mapping.is_stock_metric,
                     is_mapped=is_mapped,
                     canonical_indicator_id=mapping.canonical_id,
-                    canonical_indicator_name=mapping.canonical_name
+                    canonical_indicator_name=mapping.canonical_name,
+                    mapping_status=mapping.status.value
                 )
             )
 
@@ -491,12 +492,14 @@ class DistrictAnalyticsService:
         return IndicatorAuditReportResponse(
             total_parameters_observed=summary["total_parameters_observed"],
             verified_mappings_count=summary["verified_mappings_count"],
+            ambiguous_mappings_count=summary.get("ambiguous_mappings_count", 0),
             provisional_mappings_count=summary["provisional_mappings_count"],
             unmapped_parameters_count=summary["unmapped_parameters_count"],
             verified_percentage=summary["verified_percentage"],
             unmapped_percentage=summary["unmapped_percentage"],
             stock_metrics_count=summary["stock_metrics_count"],
             verified_mappings=[IndicatorMappingItem(**vm) for vm in summary["verified_mappings"]],
+            ambiguous_mappings=[IndicatorMappingItem(**am) for am in summary.get("ambiguous_mappings", [])],
             unmapped_indicators_sample=summary["unmapped_indicators_sample"],
             governance_note=summary["governance_note"],
             audit_timestamp=summary["audit_timestamp"]

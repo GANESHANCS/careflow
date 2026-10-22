@@ -90,47 +90,59 @@ MoHFW district HMIS returns contain 261 distinct raw parameters identified by se
 - Exactly **8 stock status parameters** have been classified as non-additive stock metrics.
 - All remaining 253 indicators are explicitly preserved with `status="UNMAPPED"` and their raw MoHFW parameter names untouched.
 
-### 3.2 Clinical Crosswalk Specifications (8 Verified Indicators)
+### 3.2 Clinical Crosswalk Specifications & Status Classifications (Phase 13A Audit)
 
-| MoHFW Item | Raw Parameter Name | Canonical Indicator ID | Canonical Name | Category | Unit | Clinical Rationale & Provenance |
+| MoHFW Item | Raw Parameter Name in Source CSV | Canonical Indicator ID | Canonical Name | Category | Status | Clinical Rationale & Provenance |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1.1** | Total number of pregnant women registered for ANC | `IND_antenatal_visits` | Antenatal Care (ANC) Registered Visits | Maternal Health | visits | Direct clinical equivalent to MoHFW HMIS Item 1.1. Ref: MoHFW HMIS Operational Guidelines. |
-| **2.2** | Institutional Deliveries (Public Facilities) | `IND_institutional_deliveries` | Institutional Deliveries (Public Facilities) | Maternal Health | deliveries | Deliveries conducted at Govt. hospitals, CHCs, and PHCs. Ref: National Health Mission HMIS Standards. |
-| **2.3** | Total Institutional Deliveries | `IND_total_institutional_deliveries` | Total Institutional Deliveries | Maternal Health | deliveries | Comprehensive institutional delivery volume across public and accredited private facilities. Ref: MoHFW HMIS Operational Guidelines. |
-| **6.1** | Number of Infants received BCG | `IND_bcg_vaccination` | BCG Vaccination Coverage | Child Immunization | doses | Primary newborn tuberculosis immunization. Ref: Universal Immunization Programme (UIP) India. |
-| **6.2** | Number of Infants received DPT3 / Pentavalent 3 | `IND_pentavalent_vaccination` | Pentavalent / DPT3 Vaccination Coverage | Child Immunization | doses | Third dose milestone for diphtheria, pertussis, tetanus, Hep B, Hib. Ref: UIP Guidelines. |
-| **10.1.13.c** | Total Inpatient Admissions | `IND_inpatient_admissions` | Inpatient Department (IPD) Admissions | Hospital Services | admissions | Consolidated IPD volume across secondary and tertiary public facilities. Ref: MoHFW HMIS Dictionary. |
-| **14.10.1.c** | Total Outpatient Attendance | `IND_outpatient_attendance` | Outpatient Department (OPD) Attendance | Hospital Services | visits | Overall ambulatory clinical consultation volume. Ref: MoHFW HMIS Dictionary. |
-| **14.12.1** | Total Laboratory Tests Done | `IND_lab_tests_performed` | Diagnostic Laboratory Investigations | Diagnostics | tests | Aggregate diagnostic investigation volume conducted across clinical laboratories. Ref: MoHFW HMIS Standards. |
+| **1.1** | Total number of pregnant women Registered for ANC | `IND_antenatal_visits` | Antenatal Care (ANC) Registered Visits | Maternal Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 1.1 (`Type: TOTAL`). Covers primary trimester registrations and routine antenatal surveillance. Ref: MoHFW HMIS Operational Guidelines. |
+| **2.2** | Deliveries conducted at Public Institutions (Including C-Sections) | `IND_institutional_deliveries` | Institutional Deliveries (Public Facilities) | Maternal Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 2.2 (`Type: TOTAL`). Captures deliveries in accredited public health sector facilities under skilled birth attendance. Ref: National Health Mission HMIS Standards. |
+| **2.3** | Deliveries conducted at Private Institutions (Including C-Sections) | `IND_institutional_deliveries` | Institutional Deliveries (Private Facilities) | Maternal Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 2.3 (`Type: TOTAL`). Captures private sector maternity returns under skilled birth attendance. Ref: MoHFW HMIS Operational Guidelines. |
+| **6.1** | Women getting post partum check-up within 48 hours after delivery | `IND_postnatal_visits` | Postnatal Care (PNC) Visits (≤48h) | Maternal Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 6.1 (`Type: TOTAL`). High-priority early maternal mortality prevention window within 48 hours postpartum. Ref: MoHFW HMIS Operational Guidelines. |
+| **6.2** | Women getting a post partum check up between 48 hours and 14 days after delivery | `IND_postnatal_visits` | Postnatal Care (PNC) Visits (3–14d) | Maternal Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 6.2 (`Type: TOTAL`). Captures secondary PNC monitoring completed between 3 and 14 days following delivery. Ref: MoHFW HMIS Operational Guidelines. |
+| **10.1.13.c** | Total number of children (9 to 11 months old) fully immunised (BCG+DPT123/Pentavalent123+OPV123+Measles) during the month | `IND_immunisation` | Full Immunisation Coverage (9–11m) | Child Health | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 10.1.13.c (`Type: TOTAL`). Composite count of infants completing full primary universal immunization schedule. Ref: Universal Immunization Programme (UIP). |
+| **14.12.1** | OPD attendance (All) | `IND_opd_attendance` | Outpatient Department (OPD) Attendance | Outpatient Services | **VERIFIED** | Direct clinical equivalent to MoHFW HMIS Item 14.12.1 (`Type: TOTAL`). Captures total ambulatory outpatient consultation encounters across all district facilities. Ref: MoHFW HMIS Operational Guidelines. |
+| **14.10.1.c** | Total number of patients admitted (Inpatients) during the month (sum of items 14.10.1.a and 14.10.1.b) | `IND_inpatient_admissions` | Inpatient Admissions (IPD) [Disaggregated Slices] | Inpatient Services | **AMBIGUOUS** | MoHFW Item 14.10.1.c sums male and female admissions, but in official source returns it is partitioned into demographic age slices (`1. Children` and `2. Adults`) with zero records under `TOTAL` (`is_subgroup_total=False`). Unqualified mapping to canonical `IND_inpatient_admissions` is AMBIGUOUS because queries defaulting to first available subgroup capture only pediatric admissions and exclude adult patients. |
 
 ### 3.3 Stock Metric Governance
 Parameters representing point-in-time inventory (such as Item `9.12` and Items `14.01–14.09`) are classified as `is_stock_metric=True`. The analytics service prohibits temporal summation (adding months together) for these indicators, preventing misleading aggregate totals.
 
 ### 3.4 Registry Endpoints
-- `GET /api/v1/districts/indicators/registry`: Returns complete list of indicators with mapping status and metadata. Supports `status` filter (`VERIFIED`, `UNMAPPED`).
-- `GET /api/v1/districts/indicators/audit`: Generates comprehensive governance audit report with mapping percentages, unmapped samples, and governance declarations.
+- `GET /api/v1/districts/indicators/registry`: Returns complete list of indicators with mapping status and metadata. Supports `status` filter (`VERIFIED`, `AMBIGUOUS`, `UNMAPPED`).
+- `GET /api/v1/districts/indicators/audit`: Generates comprehensive governance audit report with verified, ambiguous, provisional, and unmapped breakdown.
 
 ---
 
-## 4. Phase 12C — Multi-Year Reporting Readiness
+## 4. Phase 12C & Phase 13B — Multi-Year Reporting Readiness & Schema Architecture
 
 ### 4.1 Schema Natural Key Architecture
-The `DistrictObservation` model enforces a composite natural key index:
+The `DistrictObservation` model and database migration `c2d3e4f5a6b7` enforce the natural key constraint:
 ```python
-Index(
-    "uq_district_obs_natural_key",
+UniqueConstraint(
     "district",
     "s_no",
     "subgroup_type",
     "reporting_month",
-    "financial_year",
-    unique=True,
+    name="uq_district_obs_natural_key"
 )
 ```
-This guarantees complete idempotency across multi-year imports. Ingesting future fiscal years (e.g., FY 2016–17, 2017–18) will not conflict with or overwrite FY 2015–16 observations.
+**Architecture Note on Multi-Year Uniqueness:**
+`financial_year` is not part of the database constraint itself. Because Indian HMIS fiscal months are normalized into ISO calendar representations (e.g. FY 2015–16 is `2015-04` through `2016-03`, while FY 2016–17 is `2016-04` through `2017-03`), natural key collisions across standard consecutive fiscal years are prevented by the `reporting_month` coordinate. If observations share the same `reporting_month`, the database enforces strict single-occupancy.
 
 ### 4.2 Dynamic Query Filtering
-All district analytics endpoints accept an optional `financial_year: Optional[str] = Query(None)` parameter. When provided, calculations, time-series projections, and exports strictly isolate observations matching the designated fiscal year. When omitted, queries automatically default to the primary reporting fiscal year (`2015-16`).
+All district analytics endpoints accept an optional `financial_year: Optional[str] = Query(None)` parameter. When provided, calculations, time-series projections, and exports strictly isolate observations matching the designated fiscal year. When omitted, queries filter dynamically by target district, indicator, and reporting periods.
+
+---
+
+## 5. Phase 13 — Indicator Audit, Subgroup Resolution Defect Fix, and Regression Testing
+
+### 5.1 Evidence-Backed Indicator Audit Findings (Phase 13A)
+- **14.12.1 Verified:** Verified as `OPD attendance (All)` with Type `TOTAL` across all 32 districts in the MoHFW Tamil Nadu FY 2015–16 return. Mapped to `IND_opd_attendance`.
+- **14.10.1.c Ambiguity Identified:** Source CSV contains 64 rows for 14.10.1.c (32 districts × 2 demographic age slices: `1. Children` and `2. Adults`). Zero records exist with Type `TOTAL`. Reclassified from `VERIFIED` to `AMBIGUOUS` with explicit rationale preventing pediatric under-reporting.
+- **Crosswalk Provenance Correction:** Vetted raw parameter labels against `hmis-item-rpt-tn-for-2015-16.csv`, eliminating documentation label shifts from prior drafts.
+
+### 5.2 Cross-District Comparison Export Subgroup Resolution (Phase 13C)
+- **Defect Fixed:** When `subgroup_type` was omitted in `GET /api/analytics/district/export/compare`, the export query previously fetched all demographic slices simultaneously. For multi-subgroup parameters (such as `14.10.1.c`), this generated duplicate rows per district (64 rows instead of 32), caused `rank_map` dictionary overwrites, and conflated state mean/median calculations.
+- **Resolution:** `DistrictExportService.export_comparison_csv` now resolves the default subgroup (preferring `TOTAL`, `Total`, `4. Total`, `3. Total`, or first available slice), guaranteeing exactly 1 record per district, unique non-colliding ranks 1..N, clean state statistics, and declared subgroup metadata.
 
 ---
 
@@ -167,9 +179,74 @@ The CAREFlow frontend provides a unified, interactive workspace for district int
 
 | Test Suite | Scope | Tests Run | Result |
 | :--- | :--- | :--- | :--- |
-| `tests/test_phase_12a_csv_exports.py` | CSV streaming, formula sanitization, zero vs missing, 10k bounds | 5 | **PASSED** |
+| `tests/test_phase_12a_csv_exports.py` | CSV streaming, formula sanitization, zero vs missing, 10k bounds | 6 | **PASSED** |
 | `tests/test_phase_12b_indicator_registry.py` | Crosswalk registry, 8 indicators, non-fabrication rule, audit | 6 | **PASSED** |
 | `tests/test_phase_12c_multi_year.py` | Multi-year queries, natural key unique constraint, fiscal filtering | 4 | **PASSED** |
-| `tests/test_phase_12d_security_audit.py` | Authentication enforcement on all 9 endpoints, bounds checking | 5 | **PASSED** |
-| `frontend/src/pages/DistrictsPage.test.tsx` | UI tabs, filter dropdowns, export actions, Quality & Registry audit | 7 | **PASSED** |
-| Full Frontend Suite (`vitest run`) | Comprehensive frontend regression check | 78 | **PASSED** |
+| `tests/test_phase_12d_security_audit.py` | Authentication enforcement on all 9 endpoints, bounds checking | 4 | **PASSED** |
+| `tests/test_phase_13_indicator_audit_and_exports.py` | Ambiguity classifications, subgroup resolution defect regression | 7 | **PASSED** |
+| `tests/test_phase_14_healthcare_analytics.py` | Verified indicator eligibility, 12m completeness, missing vs zero | 4 | **PASSED** |
+| `tests/test_phase_14_forecasting_readiness.py` | Chronological split, holdout evaluation, horizon limits, disclaimers | 4 | **PASSED** |
+| `tests/test_phase_14_anomaly_detection.py` | Robust MAD outliers, MoM volatility, small-sample safety | 4 | **PASSED** |
+| `tests/test_phase_14_endpoints.py` | Auth enforcement, parameter validation, schema compliance | 5 | **PASSED** |
+| `frontend/src/pages/DistrictsPage.test.tsx` | UI tabs, filter dropdowns, Intelligence tab, Quality & Registry audit | 8 | **PASSED** |
+| Full Frontend Suite (`npm test -- --run`) | Comprehensive frontend regression check across 14 suites | 79 | **PASSED** |
+
+---
+
+## 8. Phase 14 — Healthcare Intelligence, Forecasting Foundation & Early-Warning Analytics
+
+### 8.1 Architecture and Endpoints
+
+CAREFlow India Phase 14 introduces dedicated operational intelligence endpoints under `/api/analytics/district/intelligence/`:
+
+| Endpoint | Method | Query Parameters | Description |
+| :--- | :--- | :--- | :--- |
+| `/api/analytics/district/intelligence/overview` | `GET` | `district`, `s_no`, `subgroup_type`, `financial_year` | Retrieves chronological time-series for a VERIFIED indicator, reporting completeness, missing month detection, observed zero tracking, and official MoHFW provenance. |
+| `/api/analytics/district/intelligence/readiness` | `GET` | `district`, `s_no`, `horizon` (1-12), `subgroup_type`, `financial_year` | Evaluates historical depth, enforces chronological hold-out train/test split, calculates baseline error metrics (MAE, RMSE, sMAPE, WAPE) on held-out test months, and provides forward baseline projections. |
+| `/api/analytics/district/intelligence/anomalies` | `GET` | `district` (optional), `s_no` (optional), `reporting_month` (optional), `subgroup_type`, `financial_year` | Runs conservative non-parametric anomaly detection: Median Absolute Deviation (MAD > 3.5), abrupt Month-over-Month shifts (>50% jump & >3σ), missing reporting period detection, and cross-district spatial outliers. |
+
+### 8.2 Strict Indicator Eligibility & Exclusions
+
+Only indicators classified with `status="VERIFIED"` in the `IndicatorMappingRegistry` are eligible for canonical healthcare intelligence:
+
+1. **Eligible VERIFIED Indicators:**
+   - `1.1` (`IND_antenatal_visits`): Antenatal Care (ANC) Registered Visits
+   - `2.2` (`IND_institutional_deliveries`): Institutional Deliveries (Public Facilities)
+   - `2.3` (`IND_institutional_deliveries`): Institutional Deliveries (Private Facilities)
+   - `6.1` (`IND_postnatal_visits`): Postnatal Care (PNC) Visits (≤48h)
+   - `6.2` (`IND_postnatal_visits`): Postnatal Care (PNC) Visits (3–14d)
+   - `10.1.13.c` (`IND_immunisation`): Full Immunisation Coverage (9–11m)
+   - `14.12.1` (`IND_opd_attendance`): Outpatient Department (OPD) Attendance
+
+2. **Explicit Exclusions & Governance Rules:**
+   - **`14.10.1.c` (Inpatient Admissions):** Excluded from canonical intelligence because official returns only provide demographic slices (`1. Children` and `2. Adults`) without an authoritative unified total row (`is_subgroup_total=False`), preventing accidental pediatric under-reporting.
+   - **Stock/Capacity Metrics (`is_stock_metric=True`, e.g. Items `9.12`, `14.01–14.09`):** Excluded from volume demand forecasting and temporal summation.
+   - **Unmapped Parameters (253 metrics):** Excluded from canonical analytics and preserved verbatim.
+
+### 8.3 Forecasting Readiness & Single-Year Dataset Limitations
+
+1. **Dataset Limitation Disclosure:**
+   The current HMIS archive contains single-year administrative returns (12 calendar months: `2015-04` through `2016-03`). A single fiscal year cannot establish multi-year seasonal cycles or support long-horizon forecasting. Requests for horizons $>3$ months or seasonal models return an explicit `INSUFFICIENT_HISTORY` status.
+2. **Chronological Hold-Out Evaluation (Zero Leakage):**
+   - Training Window: First 9 months (`2015-04` through `2015-12`).
+   - Evaluation Window: Final 3 months (`2016-01` through `2016-03`).
+   - Models are fitted strictly on the training window and evaluated against unseen ground-truth values in the hold-out window.
+3. **Candidate Baseline Models:**
+   - **Naïve Forecaster:** Extrapolates the most recent observed training value.
+   - **Moving Average Forecaster (3m):** Averages the final 3 months of the training window.
+   - **Linear Drift Forecaster:** Extrapolates deterministic slope and intercept fitted on training indices.
+4. **Clinical Validation Disclaimer:**
+   Baseline forecasts are descriptive statistical projections. They are not clinically validated and do not account for external epidemiological shocks or interventions.
+
+### 8.4 Conservative Anomaly & Change Detection
+
+1. **Robust Median Absolute Deviation (MAD):**
+   Identifies outliers using the modified Z-score $M_i = \frac{0.6745 \cdot |x_i - \text{median}|}{\text{effective\_MAD}}$. Flagged when $M_i > 3.5$. To prevent zero-division when $>50\%$ of observations are identical, effective scale falls back to Mean Absolute Deviation.
+2. **Month-over-Month Shift Detection:**
+   Flags abrupt volume swings where both the percentage change exceeds $50\%$ and the absolute jump exceeds $3\sigma$ of historical month-to-month volatility.
+3. **Missing Period Audit:**
+   Surfaces expected calendar months in the 12-month sequence that were unreported or submitted with missing values.
+4. **Cross-District Spatial Outlier Detection:**
+   Compares district values against the state cross-district median and state MAD across all reporting districts in that month.
+5. **Regulatory Labeling & Governance:**
+   All alerts are labeled as `STATISTICAL_SIGNAL`. They do not constitute clinical diagnoses, disease outbreak declarations, or evidence of reporting fraud.

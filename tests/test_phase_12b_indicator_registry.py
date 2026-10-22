@@ -109,10 +109,11 @@ def test_registry_verified_clinical_mappings():
     assert opd.canonical_id == "IND_opd_attendance"
     assert opd.is_stock_metric is False
 
-    # Test IPD admissions (14.10.1.c)
+    # Test IPD admissions (14.10.1.c) - classified as AMBIGUOUS due to demographic slice partitioning
     ipd = IndicatorMappingRegistry.get_mapping("14.10.1.c")
-    assert ipd.status == MappingStatus.VERIFIED
+    assert ipd.status == MappingStatus.AMBIGUOUS
     assert ipd.canonical_id == "IND_inpatient_admissions"
+    assert "AMBIGUOUS" in ipd.rationale
     assert ipd.unit == "admissions"
 
     # Test Immunisation (10.1.13.c)

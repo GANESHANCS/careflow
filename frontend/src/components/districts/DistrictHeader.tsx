@@ -1,8 +1,8 @@
 import React from 'react';
-import { ShieldCheck, MapPin, Calendar, Layers, AlertCircle, FileSpreadsheet, TrendingUp, BarChart3, Table } from 'lucide-react';
+import { ShieldCheck, MapPin, Calendar, Layers, AlertCircle, FileSpreadsheet, TrendingUp, BarChart3, Table, Activity } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 
-export type DistrictTab = 'trends' | 'compare' | 'table' | 'quality';
+export type DistrictTab = 'trends' | 'compare' | 'table' | 'quality' | 'intelligence';
 
 interface DistrictHeaderProps {
   activeTab: DistrictTab;
@@ -25,6 +25,7 @@ export const DistrictHeader: React.FC<DistrictHeaderProps> = ({
     { id: 'trends', label: 'Monthly Trends', icon: TrendingUp },
     { id: 'compare', label: 'District Comparison', icon: BarChart3 },
     { id: 'table', label: 'Observation Records', icon: Table },
+    { id: 'intelligence', label: 'Intelligence & Early Warning', icon: Activity, badge: 'Phase 14' },
     { id: 'quality', label: 'Quality & Provenance', icon: ShieldCheck, badge: 'Phase 11F' },
   ];
 

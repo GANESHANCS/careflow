@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,10 @@ from backend.app.db.models.user import User
 from backend.app.api.deps import get_current_active_user
 from backend.app.services.analytics.district_analytics import DistrictAnalyticsService
 from backend.app.services.analytics.district_export import DistrictExportService
+from backend.app.services.analytics.healthcare_intelligence import (
+    HealthcareIntelligenceService,
+    IneligibleIndicatorError,
+)
 from backend.app.schemas.district_analytics import (
     DistrictCatalogResponse,
     DistrictIndicatorCatalogResponse,
@@ -16,6 +20,9 @@ from backend.app.schemas.district_analytics import (
     DistrictDataQualitySummaryResponse,
     IndicatorRegistryResponse,
     IndicatorAuditReportResponse,
+    VerifiedIndicatorOverviewResponse,
+    ForecastingReadinessResponse,
+    DistrictAnomalyReportResponse,
 )
 
 router = APIRouter()
@@ -200,3 +207,91 @@ def get_district_data_quality_summary(
     """
     service = DistrictAnalyticsService(db)
     return service.get_data_quality_summary()
+
+
+# ===========================================================================
+# Phase 14: Healthcare Intelligence, Forecasting Readiness & Early-Warning APIs
+# ===========================================================================
+
+@router.get("/intelligence/overview", response_model=VerifiedIndicatorOverviewResponse)
+def get_verified_intelligence_overview(
+    district: str = Query(..., description="Target district name (e.g. Ariyalur)"),
+    s_no: str = Query(..., description="Target verified indicator S.No. (e.g. 1.1, 14.12.1)"),
+    subgroup_type: Optional[str] = Query(None, description="Optional subgroup slice (e.g. TOTAL)"),
+    financial_year: Optional[str] = Query("2015-16", description="Optional financial year"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 14B: Fetches complete chronological time-series for a verified indicator,
+    strictly distinguishing zero from missing, reporting completeness, non-additive stock alerts,
+    and official MoHFW provenance. Rejects unmapped or ambiguous indicators.
+    """
+    service = HealthcareIntelligenceService(db)
+    try:
+        return service.get_verified_indicator_timeseries(
+            district=district,
+            s_no=s_no,
+            subgroup_type=subgroup_type,
+            financial_year=financial_year
+        )
+    except IneligibleIndicatorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/intelligence/readiness", response_model=ForecastingReadinessResponse)
+def evaluate_forecasting_readiness(
+    district: str = Query(..., description="Target district name"),
+    s_no: str = Query(..., description="Target verified indicator S.No."),
+    horizon: int = Query(3, ge=1, le=12, description="Forecast horizon in months (1-12)"),
+    subgroup_type: Optional[str] = Query(None, description="Optional subgroup slice"),
+    financial_year: Optional[str] = Query("2015-16", description="Optional financial year"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 14C: Evaluates forecasting readiness for a verified indicator on single-year data.
+    Enforces chronological hold-out train/test split with zero future-data leakage.
+    Evaluates naïve and moving average baselines on hold-out data. Returns explicit
+    insufficient-data status when long horizons (>3m) or seasonal requirements are not met.
+    """
+    service = HealthcareIntelligenceService(db)
+    try:
+        return service.evaluate_forecasting_readiness(
+            district=district,
+            s_no=s_no,
+            horizon=horizon,
+            subgroup_type=subgroup_type,
+            financial_year=financial_year
+        )
+    except IneligibleIndicatorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/intelligence/anomalies", response_model=DistrictAnomalyReportResponse)
+def detect_district_anomalies(
+    district: Optional[str] = Query(None, description="Optional target district"),
+    s_no: Optional[str] = Query(None, description="Optional target verified indicator S.No."),
+    reporting_month: Optional[str] = Query(None, description="Optional target reporting period (YYYY-MM)"),
+    subgroup_type: Optional[str] = Query(None, description="Optional subgroup slice"),
+    financial_year: Optional[str] = Query("2015-16", description="Optional financial year"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 14D: Conservative statistical early-warning and change detection.
+    Detects MAD outliers (>3.5 modified z-score), abrupt MoM shifts, missing reporting periods,
+    and spatial deviations relative to state distributions.
+    All alerts labeled as statistical signals requiring human review (not clinical diagnoses).
+    """
+    service = HealthcareIntelligenceService(db)
+    try:
+        return service.detect_anomalies(
+            district=district,
+            s_no=s_no,
+            reporting_month=reporting_month,
+            subgroup_type=subgroup_type,
+            financial_year=financial_year
+        )
+    except IneligibleIndicatorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

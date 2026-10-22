@@ -662,13 +662,148 @@ export interface IndicatorRegistryResponse {
 export interface IndicatorAuditReportResponse {
   total_parameters_observed: number;
   verified_mappings_count: number;
+  ambiguous_mappings_count?: number;
   provisional_mappings_count: number;
   unmapped_parameters_count: number;
   verified_percentage: number;
   unmapped_percentage: number;
   stock_metrics_count: number;
   verified_mappings: IndicatorMappingItem[];
+  ambiguous_mappings?: IndicatorMappingItem[];
   unmapped_indicators_sample: string[];
   governance_note: string;
   audit_timestamp: string;
+}
+
+// Phase 14: Healthcare Intelligence, Forecasting Readiness & Early-Warning Types
+export interface VerifiedIndicatorTimeSeriesPoint {
+  month: string;
+  date: string;
+  value: number | null;
+  value_type: string;
+  is_zero: boolean;
+  is_missing: boolean;
+}
+
+export interface VerifiedIndicatorOverviewResponse {
+  s_no: string;
+  parameter_name: string;
+  canonical_id: string;
+  canonical_name: string;
+  category: string;
+  unit: string;
+  mapping_status: string;
+  provenance: string;
+  rationale: string;
+  is_stock_metric: boolean;
+  temporal_aggregation_permitted: boolean;
+  district: string;
+  subgroup_type: string;
+  financial_year: string;
+  total_expected_months: number;
+  reported_months_count: number;
+  valid_months_count: number;
+  zero_months_count: number;
+  missing_months_count: number;
+  completeness_ratio: number;
+  mean_value: number | null;
+  median_value: number | null;
+  min_value: number | null;
+  max_value: number | null;
+  std_dev: number | null;
+  points: VerifiedIndicatorTimeSeriesPoint[];
+  stock_warning: string | null;
+  governance_notice: string;
+}
+
+export interface BaselineModelEvaluation {
+  model_name: string;
+  evaluation_metrics: {
+    mae: number;
+    rmse: number;
+    smape: number;
+    wape: number;
+    mape: number;
+  };
+  predictions: number[];
+  ground_truth: number[];
+}
+
+export interface BaselineForecastPoint {
+  month: string;
+  predicted_value: number;
+  lower_bound: number;
+  upper_bound: number;
+  model_used: string;
+}
+
+export interface ForecastingReadinessResponse {
+  district: string;
+  s_no: string;
+  parameter_name: string;
+  canonical_id?: string | null;
+  canonical_name?: string | null;
+  subgroup_type: string;
+  financial_year: string;
+  requested_horizon: number;
+  is_ready: boolean;
+  readiness_status: string;
+  readiness_reason: string;
+  dataset_limitation: string;
+  clinical_validation_disclaimer: string;
+  historical_months_available: number;
+  historical_months_required: number;
+  training_period?: {
+    start_month: string;
+    end_month: string;
+    months_count: number;
+  } | null;
+  evaluation_period?: {
+    start_month: string;
+    end_month: string;
+    months_count: number;
+  } | null;
+  baseline_models_evaluated: BaselineModelEvaluation[];
+  selected_baseline_model?: string | null;
+  held_out_metrics?: {
+    mae: number;
+    rmse: number;
+    smape: number;
+    wape: number;
+    mape: number;
+  } | null;
+  baseline_forecast: BaselineForecastPoint[];
+}
+
+export interface AnomalySignalItem {
+  signal_id: string;
+  signal_type: 'HISTORICAL_OUTLIER_MAD' | 'MONTH_OVER_MONTH_SHIFT' | 'MISSING_REPORTING_PERIOD' | 'SPATIAL_DEVIATION' | string;
+  severity: 'INFO' | 'WARNING' | 'ELEVATED' | string;
+  district: string;
+  s_no: string;
+  parameter_name: string;
+  reporting_month: string;
+  observed_value: number | null;
+  expected_baseline: number | null;
+  deviation_score: number;
+  metric_unit?: string | null;
+  statistical_method: string;
+  rationale: string;
+  data_points_used: number;
+  disclaimer: string;
+}
+
+export interface DistrictAnomalyReportResponse {
+  s_no?: string | null;
+  district?: string | null;
+  reporting_month?: string | null;
+  financial_year?: string | null;
+  total_signals_detected: number;
+  signals: AnomalySignalItem[];
+  evaluation_summary: {
+    districts_evaluated: number;
+    indicators_evaluated: number;
+    methods_applied: string[];
+  };
+  governance_disclaimer: string;
 }

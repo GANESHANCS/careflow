@@ -34,6 +34,9 @@ import type {
   DistrictComparisonExportParams,
   IndicatorRegistryResponse,
   IndicatorAuditReportResponse,
+  VerifiedIndicatorOverviewResponse,
+  ForecastingReadinessResponse,
+  DistrictAnomalyReportResponse,
 } from './types';
 
 const API_BASE_URL = '/api';
@@ -463,5 +466,53 @@ export const api = {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  // Phase 14: Healthcare Intelligence, Forecasting Readiness & Early-Warning APIs
+  getDistrictIntelligenceOverview: (params: {
+    district: string;
+    s_no: string;
+    subgroup_type?: string;
+    financial_year?: string;
+  }): Promise<VerifiedIndicatorOverviewResponse> => {
+    const query = new URLSearchParams();
+    query.append('district', params.district);
+    query.append('s_no', params.s_no);
+    if (params.subgroup_type) query.append('subgroup_type', params.subgroup_type);
+    if (params.financial_year) query.append('financial_year', params.financial_year);
+    return fetchJson<VerifiedIndicatorOverviewResponse>(`/analytics/district/intelligence/overview?${query.toString()}`);
+  },
+
+  getDistrictForecastingReadiness: (params: {
+    district: string;
+    s_no: string;
+    horizon?: number;
+    subgroup_type?: string;
+    financial_year?: string;
+  }): Promise<ForecastingReadinessResponse> => {
+    const query = new URLSearchParams();
+    query.append('district', params.district);
+    query.append('s_no', params.s_no);
+    if (params.horizon) query.append('horizon', String(params.horizon));
+    if (params.subgroup_type) query.append('subgroup_type', params.subgroup_type);
+    if (params.financial_year) query.append('financial_year', params.financial_year);
+    return fetchJson<ForecastingReadinessResponse>(`/analytics/district/intelligence/readiness?${query.toString()}`);
+  },
+
+  getDistrictAnomalies: (params?: {
+    district?: string;
+    s_no?: string;
+    reporting_month?: string;
+    subgroup_type?: string;
+    financial_year?: string;
+  }): Promise<DistrictAnomalyReportResponse> => {
+    const query = new URLSearchParams();
+    if (params?.district) query.append('district', params.district);
+    if (params?.s_no) query.append('s_no', params.s_no);
+    if (params?.reporting_month) query.append('reporting_month', params.reporting_month);
+    if (params?.subgroup_type) query.append('subgroup_type', params.subgroup_type);
+    if (params?.financial_year) query.append('financial_year', params.financial_year);
+    const qStr = query.toString();
+    return fetchJson<DistrictAnomalyReportResponse>(`/analytics/district/intelligence/anomalies${qStr ? `?${qStr}` : ''}`);
   },
 };

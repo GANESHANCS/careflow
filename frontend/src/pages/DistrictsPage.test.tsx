@@ -23,6 +23,9 @@ vi.mock('../api/client', () => ({
     getIndicatorRegistry: vi.fn(),
     downloadDistrictTrendsCsv: vi.fn(),
     downloadDistrictComparisonCsv: vi.fn(),
+    getDistrictIntelligenceOverview: vi.fn(),
+    getDistrictForecastingReadiness: vi.fn(),
+    getDistrictAnomalies: vi.fn(),
   },
 }));
 
@@ -400,5 +403,122 @@ describe('DistrictsPage Component (Phases 11E–12E)', () => {
       expect(screen.getByText(/District Analytics Catalog Offline/i)).toBeInTheDocument();
       expect(screen.getByText(/Connection Refused to District Service/i)).toBeInTheDocument();
     });
+  });
+
+  it('switches to Intelligence & Early Warning tab and renders readiness and anomalies', async () => {
+    vi.mocked(api.getDistrictIntelligenceOverview).mockResolvedValue({
+      s_no: '1.1',
+      parameter_name: 'Total number of pregnant women registered for ANC',
+      canonical_id: 'IND_antenatal_visits',
+      canonical_name: 'Antenatal Care (ANC) Registered Visits',
+      category: 'Maternal Health',
+      unit: 'visits',
+      mapping_status: 'VERIFIED',
+      provenance: 'MoHFW HMIS Operational Guidelines',
+      rationale: 'Direct clinical equivalent',
+      is_stock_metric: false,
+      temporal_aggregation_permitted: true,
+      district: 'Ariyalur',
+      subgroup_type: 'Total',
+      financial_year: '2015-16',
+      total_expected_months: 12,
+      reported_months_count: 12,
+      valid_months_count: 12,
+      zero_months_count: 0,
+      missing_months_count: 0,
+      completeness_ratio: 1.0,
+      mean_value: 1000.0,
+      median_value: 1000.0,
+      min_value: 950.0,
+      max_value: 1050.0,
+      std_dev: 30.0,
+      points: [
+        { month: '2015-04', date: '2015-04-01', value: 1000.0, value_type: 'VALID', is_zero: false, is_missing: false }
+      ],
+      stock_warning: null,
+      governance_notice: 'Canonical healthcare metrics'
+    });
+
+    vi.mocked(api.getDistrictForecastingReadiness).mockResolvedValue({
+      district: 'Ariyalur',
+      s_no: '1.1',
+      parameter_name: 'ANC registrations',
+      canonical_id: 'IND_antenatal_visits',
+      canonical_name: 'Antenatal Care (ANC) Registered Visits',
+      subgroup_type: 'Total',
+      financial_year: '2015-16',
+      requested_horizon: 3,
+      is_ready: true,
+      readiness_status: 'ELIGIBLE_FOR_BASELINE_EVALUATION',
+      readiness_reason: 'Evaluated on chronological hold-out',
+      dataset_limitation: 'Single-year HMIS dataset (12 months)',
+      clinical_validation_disclaimer: 'Statistical baseline models are not clinically validated',
+      historical_months_available: 12,
+      historical_months_required: 9,
+      training_period: { start_month: '2015-04', end_month: '2015-12', months_count: 9 },
+      evaluation_period: { start_month: '2016-01', end_month: '2016-03', months_count: 3 },
+      baseline_models_evaluated: [
+        {
+          model_name: 'Naive Forecaster',
+          evaluation_metrics: { mae: 15.0, rmse: 18.0, smape: 1.5, wape: 1.5, mape: 1.5 },
+          predictions: [1000.0, 1000.0, 1000.0],
+          ground_truth: [1010.0, 990.0, 1020.0]
+        }
+      ],
+      selected_baseline_model: 'Naive Forecaster',
+      held_out_metrics: { mae: 15.0, rmse: 18.0, smape: 1.5, wape: 1.5, mape: 1.5 },
+      baseline_forecast: [
+        { month: '2016-04', predicted_value: 1000.0, lower_bound: 964.7, upper_bound: 1035.3, model_used: 'Naive Forecaster' }
+      ]
+    });
+
+    vi.mocked(api.getDistrictAnomalies).mockResolvedValue({
+      total_signals_detected: 1,
+      signals: [
+        {
+          signal_id: 'SIG_MAD_1',
+          signal_type: 'HISTORICAL_OUTLIER_MAD',
+          severity: 'WARNING',
+          district: 'Ariyalur',
+          s_no: '1.1',
+          parameter_name: 'ANC Registration',
+          reporting_month: '2016-03',
+          observed_value: 4500.0,
+          expected_baseline: 1000.0,
+          deviation_score: 4.2,
+          metric_unit: 'visits',
+          statistical_method: 'Median Absolute Deviation',
+          rationale: 'Observed value is 4.2x MAD above median',
+          data_points_used: 12,
+          disclaimer: 'STATISTICAL_SIGNAL — Requires HMIS review'
+        }
+      ],
+      evaluation_summary: {
+        districts_evaluated: 1,
+        indicators_evaluated: 1,
+        methods_applied: ['MAD']
+      },
+      governance_disclaimer: 'Statistical anomaly detection disclaimer'
+    });
+
+    render(
+      <BrowserRouter>
+        <DistrictsPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Intelligence & Early Warning/i)).toBeInTheDocument();
+    });
+
+    const intelTab = screen.getByRole('button', { name: /Intelligence & Early Warning/i });
+    fireEvent.click(intelTab);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Eligible for Baseline Evaluation/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Single-Year Dataset Limitation/i)).toBeInTheDocument();
+    expect(screen.getByText(/Statistical Anomaly & Operational Change Signals/i)).toBeInTheDocument();
+    expect(screen.getByText(/HISTORICAL OUTLIER MAD/i)).toBeInTheDocument();
   });
 });

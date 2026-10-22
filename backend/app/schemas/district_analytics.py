@@ -21,6 +21,7 @@ class DistrictIndicatorItem(BaseModel):
     is_mapped: bool = Field(..., description="Whether a verified crosswalk to a canonical CAREFlow indicator exists")
     canonical_indicator_id: Optional[str] = Field(None, description="Mapped CAREFlow indicator ID if verified")
     canonical_indicator_name: Optional[str] = Field(None, description="Mapped CAREFlow indicator name if verified")
+    mapping_status: Optional[str] = Field(None, description="Detailed crosswalk status: VERIFIED, AMBIGUOUS, UNMAPPED")
 
 
 class DistrictIndicatorCatalogResponse(BaseModel):
@@ -146,12 +147,120 @@ class IndicatorRegistryResponse(BaseModel):
 class IndicatorAuditReportResponse(BaseModel):
     total_parameters_observed: int
     verified_mappings_count: int
-    provisional_mappings_count: int
+    ambiguous_mappings_count: int = 0
+    provisional_mappings_count: int = 0
     unmapped_parameters_count: int
     verified_percentage: float
     unmapped_percentage: float
     stock_metrics_count: int
     verified_mappings: List[IndicatorMappingItem]
+    ambiguous_mappings: List[IndicatorMappingItem] = []
     unmapped_indicators_sample: List[str]
     governance_note: str
     audit_timestamp: str
+
+
+# ===========================================================================
+# Phase 14: Healthcare Intelligence, Forecasting Readiness & Early-Warning Schemas
+# ===========================================================================
+
+class VerifiedIndicatorTimeSeriesPoint(BaseModel):
+    month: str
+    date: str
+    value: Optional[float] = None
+    value_type: str
+    is_zero: bool = False
+    is_missing: bool = False
+
+
+class VerifiedIndicatorOverviewResponse(BaseModel):
+    s_no: str
+    parameter_name: str
+    canonical_id: str
+    canonical_name: str
+    category: str
+    unit: str
+    mapping_status: str
+    provenance: str
+    rationale: str
+    is_stock_metric: bool
+    temporal_aggregation_permitted: bool
+    district: str
+    subgroup_type: str
+    financial_year: str
+    total_expected_months: int
+    reported_months_count: int
+    valid_months_count: int
+    zero_months_count: int
+    missing_months_count: int
+    completeness_ratio: float
+    mean_value: Optional[float] = None
+    median_value: Optional[float] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    std_dev: Optional[float] = None
+    points: List[VerifiedIndicatorTimeSeriesPoint]
+    stock_warning: Optional[str] = None
+    governance_notice: str = Field(
+        default="Canonical healthcare metrics strictly derived from VERIFIED MoHFW crosswalks without concept conflation.",
+        description="Governance notice"
+    )
+
+
+class ForecastingReadinessResponse(BaseModel):
+    district: str
+    s_no: str
+    parameter_name: str
+    canonical_id: Optional[str] = None
+    canonical_name: Optional[str] = None
+    subgroup_type: str
+    financial_year: str
+    requested_horizon: int
+    is_ready: bool
+    readiness_status: str
+    readiness_reason: str
+    dataset_limitation: str
+    clinical_validation_disclaimer: str
+    historical_months_available: int
+    historical_months_required: int
+    training_period: Optional[Dict[str, Any]] = None
+    evaluation_period: Optional[Dict[str, Any]] = None
+    baseline_models_evaluated: List[Dict[str, Any]] = []
+    selected_baseline_model: Optional[str] = None
+    held_out_metrics: Optional[Dict[str, float]] = None
+    baseline_forecast: List[Dict[str, Any]] = []
+
+
+class AnomalySignalItem(BaseModel):
+    signal_id: str
+    signal_type: str  # "HISTORICAL_OUTLIER_MAD", "MONTH_OVER_MONTH_SHIFT", "MISSING_REPORTING_PERIOD", "SPATIAL_DEVIATION"
+    severity: str     # "INFO", "WARNING", "ELEVATED"
+    district: str
+    s_no: str
+    parameter_name: str
+    reporting_month: str
+    observed_value: Optional[float] = None
+    expected_baseline: Optional[float] = None
+    deviation_score: float
+    metric_unit: Optional[str] = None
+    statistical_method: str
+    rationale: str
+    data_points_used: int
+    disclaimer: str = (
+        "STATISTICAL_SIGNAL — Indicates statistical variation requiring HMIS officer review. "
+        "Not a clinical diagnosis, disease outbreak alert, or evidence of reporting fraud."
+    )
+
+
+class DistrictAnomalyReportResponse(BaseModel):
+    s_no: Optional[str] = None
+    district: Optional[str] = None
+    reporting_month: Optional[str] = None
+    financial_year: Optional[str] = None
+    total_signals_detected: int
+    signals: List[AnomalySignalItem]
+    evaluation_summary: Dict[str, Any]
+    governance_disclaimer: str = (
+        "Statistical anomaly detection utilizes robust non-parametric estimation (Median Absolute Deviation). "
+        "All alerts require human clinical and operational validation before administrative action."
+    )

@@ -20,6 +20,7 @@ import { DistrictMonthlyTrendChart } from '../components/districts/DistrictMonth
 import { DistrictComparisonChart } from '../components/districts/DistrictComparisonChart';
 import { DistrictDetailTable } from '../components/districts/DistrictDetailTable';
 import { DistrictQualityTab } from '../components/districts/DistrictQualityTab';
+import { DistrictIntelligenceTab } from '../components/districts/DistrictIntelligenceTab';
 
 export const DistrictsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DistrictTab>('trends');
@@ -333,6 +334,22 @@ export const DistrictsPage: React.FC = () => {
           <DistrictQualityTab
             qualityData={qualityData}
             loading={qualityLoading}
+          />
+        </ScrollReveal>
+      )}
+
+      {/* Tab 5: Phase 14 Healthcare Intelligence, Forecasting Readiness & Early Warning */}
+      {activeTab === 'intelligence' && (
+        <ScrollReveal delay={0.1}>
+          <DistrictIntelligenceTab
+            district={selectedDistrict}
+            sNo={selectedSNo}
+            subgroupType={selectedSubgroup}
+            financialYear={selectedFinancialYear}
+            availableDistricts={catalog?.districts}
+            availableIndicators={indicators}
+            onSelectDistrict={(dist) => setSelectedDistrict(dist)}
+            onSelectSNo={(s) => setSelectedSNo(s)}
           />
         </ScrollReveal>
       )}
