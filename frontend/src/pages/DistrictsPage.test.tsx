@@ -26,6 +26,10 @@ vi.mock('../api/client', () => ({
     getDistrictIntelligenceOverview: vi.fn(),
     getDistrictForecastingReadiness: vi.fn(),
     getDistrictAnomalies: vi.fn(),
+    getDistrictSourceRegistry: vi.fn(),
+    getCrossYearComparability: vi.fn(),
+    getDistrictAnomalyReviews: vi.fn(),
+    postDistrictAnomalyReviewAction: vi.fn(),
   },
 }));
 
@@ -238,6 +242,38 @@ describe('DistrictsPage Component (Phases 11E–12E)', () => {
     vi.mocked(api.getIndicatorAudit).mockResolvedValue(mockAuditReport);
     vi.mocked(api.downloadDistrictTrendsCsv).mockResolvedValue(undefined);
     vi.mocked(api.downloadDistrictComparisonCsv).mockResolvedValue(undefined);
+    vi.mocked(api.getDistrictSourceRegistry).mockResolvedValue({
+      state: 'Tamil Nadu',
+      total_registered_years: 3,
+      ingested_years: ['2015-16'],
+      pending_years: ['2016-17', '2017-18'],
+      sources: [
+        {
+          financial_year: '2015-16',
+          state: 'Tamil Nadu',
+          status: 'INGESTED',
+          source_filename: 'hmis-item-rpt-tn-for-2015-16.csv',
+          source_portal: 'MoHFW',
+          source_url: 'https://hmis.mohfw.gov.in',
+          file_format: 'CSV',
+          total_observations_ingested: 175872,
+          ingestion_readiness: 'READY_AND_INGESTED',
+        },
+      ],
+      acquisition_guidelines: 'Upload via /imports',
+    });
+    vi.mocked(api.getCrossYearComparability).mockResolvedValue({
+      state: 'Tamil Nadu',
+      available_financial_years: ['2015-16'],
+      coverage_by_year: [],
+      boundary_shifts_catalog: [],
+      indicator_stability: [],
+      comparability_warnings: ['Single-year dataset limitation'],
+      multi_year_aggregation_permitted: false,
+      governance_notice: 'Rule 7 & 8 enforced',
+    });
+    vi.mocked(api.getDistrictAnomalyReviews).mockResolvedValue([]);
+    vi.mocked(api.postDistrictAnomalyReviewAction).mockResolvedValue({} as any);
   });
 
   it('renders district workspace header with official data separation callout', async () => {
@@ -517,8 +553,9 @@ describe('DistrictsPage Component (Phases 11E–12E)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Eligible for Baseline Evaluation/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Single-Year Dataset Limitation/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Single-Year Dataset Limitation/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Statistical Anomaly & Operational Change Signals/i)).toBeInTheDocument();
     expect(screen.getByText(/HISTORICAL OUTLIER MAD/i)).toBeInTheDocument();
+    expect(screen.getByText(/Review & Audit/i)).toBeInTheDocument();
   });
 });

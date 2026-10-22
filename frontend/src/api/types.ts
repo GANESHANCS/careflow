@@ -790,6 +790,9 @@ export interface AnomalySignalItem {
   statistical_method: string;
   rationale: string;
   data_points_used: number;
+  review_status?: 'OPEN' | 'ACKNOWLEDGED' | 'UNDER_REVIEW' | 'RESOLVED' | 'REOPENED' | string;
+  last_reviewed_by_username?: string | null;
+  last_reviewed_at?: string | null;
   disclaimer: string;
 }
 
@@ -806,4 +809,114 @@ export interface DistrictAnomalyReportResponse {
     methods_applied: string[];
   };
   governance_disclaimer: string;
+}
+
+// -------------------------------------------------------------------
+// Phase 15: Source Registry, Comparability, and Anomaly Review Types
+// -------------------------------------------------------------------
+
+export interface HMISSourceItem {
+  financial_year: string;
+  state: string;
+  status: 'INGESTED' | 'AVAILABLE_UNINGESTED' | 'BLOCKED_MISSING_OFFICIAL_FILE' | string;
+  source_filename: string;
+  source_portal: string;
+  source_url: string;
+  file_format: string;
+  total_observations_ingested: number;
+  file_sha256?: string | null;
+  acquisition_blocker?: string | null;
+  ingestion_readiness: string;
+}
+
+export interface SourceRegistrySummary {
+  state: string;
+  total_registered_years: number;
+  ingested_years: string[];
+  pending_years: string[];
+  sources: HMISSourceItem[];
+  acquisition_guidelines: string;
+}
+
+export interface DistrictBoundaryShift {
+  bifurcated_district: string;
+  parent_district: string;
+  effective_year: string;
+  notes: string;
+}
+
+export interface IndicatorStabilityCheck {
+  s_no: string;
+  canonical_id?: string | null;
+  audit_status: string;
+  parameter_names_by_fy: Record<string, string>;
+  subgroups_by_fy: Record<string, string[]>;
+  is_stable: boolean;
+  drift_notes?: string | null;
+}
+
+export interface FinancialYearCoverageDetail {
+  financial_year: string;
+  total_observations: number;
+  distinct_districts_count: number;
+  districts: string[];
+  distinct_months_count: number;
+  reporting_months: string[];
+  missing_months: string[];
+  coverage_percentage: number;
+  confirmed_zero_count: number;
+  missing_value_count: number;
+  valid_value_count: number;
+}
+
+export interface CrossYearComparabilityReport {
+  state: string;
+  available_financial_years: string[];
+  coverage_by_year: FinancialYearCoverageDetail[];
+  boundary_shifts_catalog: DistrictBoundaryShift[];
+  indicator_stability: IndicatorStabilityCheck[];
+  comparability_warnings: string[];
+  multi_year_aggregation_permitted: boolean;
+  governance_notice: string;
+}
+
+export interface DistrictAnomalyReviewActionItem {
+  id: number;
+  review_id: string;
+  action: string;
+  from_status: string;
+  to_status: string;
+  notes?: string | null;
+  username: string;
+  created_at: string;
+}
+
+export interface DistrictAnomalyReviewItem {
+  id: string;
+  signal_id: string;
+  district: string;
+  indicator_id: string;
+  reporting_month: string;
+  signal_type: string;
+  severity: string;
+  current_status: 'OPEN' | 'ACKNOWLEDGED' | 'UNDER_REVIEW' | 'RESOLVED' | 'REOPENED' | string;
+  trigger_reason: string;
+  metric_value?: number | null;
+  expected_range?: string | null;
+  last_reviewed_by_username?: string | null;
+  last_reviewed_at?: string | null;
+  resolution_reason?: string | null;
+  actions: DistrictAnomalyReviewActionItem[];
+}
+
+export interface AnomalyReviewActionRequest {
+  action: 'ACKNOWLEDGE' | 'SET_UNDER_REVIEW' | 'RESOLVE' | 'REOPEN' | 'ADD_NOTE' | string;
+  notes?: string | null;
+  district?: string;
+  indicator_id?: string;
+  reporting_month?: string;
+  signal_type?: string;
+  trigger_reason?: string;
+  metric_value?: number | null;
+  expected_range?: string | null;
 }

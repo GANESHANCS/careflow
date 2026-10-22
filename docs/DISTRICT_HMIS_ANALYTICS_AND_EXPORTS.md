@@ -250,3 +250,31 @@ Only indicators classified with `status="VERIFIED"` in the `IndicatorMappingRegi
    Compares district values against the state cross-district median and state MAD across all reporting districts in that month.
 5. **Regulatory Labeling & Governance:**
    All alerts are labeled as `STATISTICAL_SIGNAL`. They do not constitute clinical diagnoses, disease outbreak declarations, or evidence of reporting fraud.
+
+---
+
+## 9. Phase 15: Multi-Year HMIS Integration & Anomaly Review Workflow
+
+### 9.1 Multi-Year Ingestion Pipeline & Schema Normalization
+- **Dynamic Financial Year Detection:** `DistrictHMISAdapter.detect_financial_year()` automatically resolves Indian financial years (e.g. `2016-17`, `2017-18`) from uploaded filenames or metadata headers.
+- **Fiscal Sequence Alignment:** `get_fiscal_month_mapping(financial_year)` dynamically maps 12 calendar months from April (Start Year) through March (End Year).
+- **Primary Key & Idempotency:** Natural composite key `(district, s_no, subgroup_type, reporting_month)` ensures observations across multiple fiscal years coexist without collision, and re-imports record audit provenance in `ImportObservationRecord` without duplication.
+
+### 9.2 Official Source Catalog & Acquisition Blocker Transparency
+- **Catalog Registry (`SourceRegistryCatalog`):**
+  - **FY 2015–16:** `INGESTED` (175,872 verified administrative returns in `district_observations`, SHA256 verified).
+  - **FY 2016–17 & FY 2017–18:** `BLOCKED_MISSING_OFFICIAL_FILE`. MoHFW HMIS portal requires authenticated session / CAPTCHA verification. In adherence to Rule 4 (zero data fabrication) and Rule 5 (no assumed local files), synthetic records are not inserted. The multi-year ingestion adapter and schema profile are fully primed for ingestion upon file upload.
+
+### 9.3 Cross-Year Data Quality & District Boundary Comparability
+- **32 Historical Revenue Districts:** Historical baseline for Tamil Nadu in FY 2015–16.
+- **Administrative Boundary Shifts Catalog:** Formally documents post-2018 district bifurcations (Tenkasi carved from Tirunelveli, Chengalpattu from Kancheepuram, Tirupathur/Ranipet from Vellore, Kallakurichi from Viluppuram, Mayiladuthurai from Nagapattinam). Cross-year longitudinal comparisons flag boundary reorganizations before data aggregation.
+- **Semantic Equivalence Verification:** Prohibits merging indicators across financial years unless verified under canonical catalog definitions.
+
+### 9.4 Anomaly Review Workflow & Immutable Audit Trail
+- **Administrative Review Lifecycle:** Status workflow: `OPEN` -> `ACKNOWLEDGED` -> `UNDER_REVIEW` -> `RESOLVED` -> `REOPENED`.
+- **Role-Based Authorization (RBAC):** `ADMIN` and `ANALYST` roles are authorized to apply review actions; `VIEWER` role is strictly restricted to read-only access with HTTP 403 enforcement.
+- **Immutable Audit Trail (`DistrictAnomalyReviewAction`):** Every state transition, explanatory rationale, and administrative note is permanently logged with timestamps, acting user identity, and from_status -> to_status coordinates.
+
+### 9.5 Multi-Year Seasonal Forecasting Prerequisites
+- **Validation Threshold:** Multi-year seasonal models (e.g., SARIMAX, Holt-Winters, Prophet) require at least 24–36 continuous monthly observations to capture annual seasonal cycles.
+- **Explicit Insufficient History Status:** In single-year datasets (12 months), long horizons ($>3$m) and multi-year seasonal claims are explicitly rejected with `INSUFFICIENT_HISTORY` diagnostic reporting.

@@ -11,6 +11,12 @@ from backend.app.db.models.import_batch import ImportBatch
 from backend.app.db.models.import_error_log import ImportErrorLog
 from backend.app.db.models.import_observation_record import ImportObservationRecord
 from backend.app.db.models.district_observation import DistrictObservation, classify_subgroup_total
+from backend.app.db.models.anomaly_review import (
+    DistrictAnomalyReview,
+    DistrictAnomalyReviewAction,
+    AnomalyReviewStatus,
+    AnomalyReviewActionType,
+)
 
 __all__ = [
     "Base",
@@ -27,5 +33,9 @@ __all__ = [
     "ImportErrorLog",
     "ImportObservationRecord",
     "DistrictObservation",
-    "classify_subgroup_total"
+    "classify_subgroup_total",
+    "DistrictAnomalyReview",
+    "DistrictAnomalyReviewAction",
+    "AnomalyReviewStatus",
+    "AnomalyReviewActionType",
 ]

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.app.db.models.district_observation import DistrictObservation
+from backend.app.db.models.anomaly_review import DistrictAnomalyReview
 from backend.app.services.analytics.indicator_registry import IndicatorMappingRegistry, MappingStatus
 from backend.app.services.forecasting.baselines import NaiveForecaster, MovingAverageForecaster
 from backend.app.services.forecasting.evaluation import calculate_metrics
@@ -717,6 +718,19 @@ class HealthcareIntelligenceService:
             if s.signal_id not in seen_ids:
                 seen_ids.add(s.signal_id)
                 dedup_signals.append(s)
+
+        if dedup_signals:
+            sig_ids = [s.signal_id for s in dedup_signals]
+            reviews = self.db.query(DistrictAnomalyReview).filter(
+                DistrictAnomalyReview.signal_id.in_(sig_ids)
+            ).all()
+            review_map = {r.signal_id: r for r in reviews}
+            for s in dedup_signals:
+                rev = review_map.get(s.signal_id)
+                if rev:
+                    s.review_status = rev.current_status
+                    s.last_reviewed_by_username = rev.last_reviewed_by_username
+                    s.last_reviewed_at = rev.last_reviewed_at.isoformat() if rev.last_reviewed_at else None
 
         return DistrictAnomalyReportResponse(
             s_no=s_no,

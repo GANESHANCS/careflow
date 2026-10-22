@@ -4,16 +4,24 @@ import {
   CheckCircle2,
   ShieldAlert,
   Info,
-  Calendar,
   Sparkles,
   TrendingUp,
   RefreshCw,
+  FileText,
+  UserCheck,
+  MessageSquare,
+  History,
+  X,
 } from 'lucide-react';
 import { api } from '../../api/client';
 import type {
   VerifiedIndicatorOverviewResponse,
   ForecastingReadinessResponse,
   DistrictAnomalyReportResponse,
+  AnomalySignalItem,
+  SourceRegistrySummary,
+  CrossYearComparabilityReport,
+  DistrictAnomalyReviewItem,
 } from '../../api/types';
 import { LoadingState } from '../feedback/LoadingState';
 import { ErrorState } from '../feedback/ErrorState';
@@ -41,6 +49,15 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
   const [overview, setOverview] = useState<VerifiedIndicatorOverviewResponse | null>(null);
   const [readiness, setReadiness] = useState<ForecastingReadinessResponse | null>(null);
   const [anomalies, setAnomalies] = useState<DistrictAnomalyReportResponse | null>(null);
+  const [sourceRegistry, setSourceRegistry] = useState<SourceRegistrySummary | null>(null);
+  const [comparability, setComparability] = useState<CrossYearComparabilityReport | null>(null);
+
+  // Anomaly Review Modal state
+  const [selectedSignal, setSelectedSignal] = useState<AnomalySignalItem | null>(null);
+  const [activeReviewDetail, setActiveReviewDetail] = useState<DistrictAnomalyReviewItem | null>(null);
+  const [reviewNote, setReviewNote] = useState<string>('');
+  const [reviewActionLoading, setReviewActionLoading] = useState<boolean>(false);
+  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
 
   // Loading & error states
   const [loading, setLoading] = useState<boolean>(true);
@@ -71,15 +88,19 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
         subgroup_type: subgroupType || undefined,
         financial_year: financialYear,
       }),
+      api.getDistrictSourceRegistry().catch(() => null),
+      api.getCrossYearComparability().catch(() => null),
     ])
-      .then(([ov, rd, an]) => {
+      .then(([ov, rd, an, src, comp]) => {
         setOverview(ov);
         setReadiness(rd);
         setAnomalies(an);
+        if (src) setSourceRegistry(src);
+        if (comp) setComparability(comp);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Error fetching healthcare intelligence data.');
+        setError(err.message || 'Failed to load district intelligence analytics.');
         setLoading(false);
       });
   }, [district, sNo, subgroupType, financialYear, horizon]);
@@ -88,68 +109,95 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
     fetchIntelligenceData();
   }, [fetchIntelligenceData]);
 
+  // Handle opening the review modal and fetching its audit trail
+  const handleOpenReviewModal = async (sig: AnomalySignalItem) => {
+    setSelectedSignal(sig);
+    setReviewNote('');
+    setReviewActionError(null);
+    try {
+      const reviews = await api.getDistrictAnomalyReviews({
+        district: sig.district,
+        status: undefined,
+      });
+      const matching = reviews.find((r) => r.signal_id === sig.signal_id) || null;
+      setActiveReviewDetail(matching);
+    } catch {
+      setActiveReviewDetail(null);
+    }
+  };
+
+  const handleExecuteReviewAction = async (action: string) => {
+    if (!selectedSignal) return;
+    setReviewActionLoading(true);
+    setReviewActionError(null);
+
+    try {
+      const updated = await api.postDistrictAnomalyReviewAction(selectedSignal.signal_id, {
+        action,
+        notes: reviewNote.trim() || undefined,
+        district: selectedSignal.district,
+        indicator_id: selectedSignal.s_no,
+        reporting_month: selectedSignal.reporting_month,
+        signal_type: selectedSignal.signal_type,
+        trigger_reason: selectedSignal.rationale,
+        metric_value: selectedSignal.observed_value ?? undefined,
+        expected_range: selectedSignal.expected_baseline !== null ? String(selectedSignal.expected_baseline) : undefined,
+      });
+      setActiveReviewDetail(updated);
+      setReviewNote('');
+
+      // Refresh anomaly list to update status badge in-place
+      const updatedAnomalies = await api.getDistrictAnomalies({
+        district,
+        s_no: sNo,
+        subgroup_type: subgroupType || undefined,
+        financial_year: financialYear,
+      });
+      setAnomalies(updatedAnomalies);
+      setReviewActionLoading(false);
+    } catch (err: any) {
+      setReviewActionError(err.message || 'Failed to apply review action.');
+      setReviewActionLoading(false);
+    }
+  };
+
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-600 flex items-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin text-stone-500" />
-          <span>Evaluating verified indicator coverage, forecasting readiness, and conservative early-warning signals...</span>
-        </div>
-        <LoadingState type="chart" />
-      </div>
-    );
+    return <LoadingState type="chart" />;
   }
 
-  if (error) {
+  if (error || !overview) {
     return (
       <ErrorState
-        title="Healthcare Intelligence Unavailable"
-        message={error}
+        title="Intelligence Data Unavailable"
+        message={error || 'Unable to compute intelligence analytics for the selected indicator.'}
         onRetry={fetchIntelligenceData}
       />
     );
   }
 
-  if (!overview) {
-    return (
-      <div className="p-8 text-center bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl">
-        <Info className="w-8 h-8 mx-auto text-stone-400 mb-2" />
-        <p className="text-stone-600 font-medium">Please select a verified clinical indicator to view healthcare intelligence.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* 1. Header Provenance & Indicator Banner */}
+    <div className="space-y-6">
+      {/* 1. Header & Verification Status Badge */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 VERIFIED Indicator
               </span>
-              <span className="text-xs font-semibold text-stone-500">
-                MoHFW Item {overview.s_no}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-stone-100 text-stone-700">
-                {overview.category}
-              </span>
+              <span className="text-xs text-stone-500 font-mono">S.No. {overview.s_no}</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
-              {overview.canonical_name}
-            </h2>
-            <p className="text-xs text-stone-500 font-mono">
-              Raw Label: {overview.parameter_name} ({overview.unit})
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">{overview.parameter_name}</h2>
+            <p className="text-xs text-stone-600 font-mono">
+              Canonical: <span className="font-semibold">{overview.canonical_name}</span> ({overview.canonical_id})
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={fetchIntelligenceData}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
-              title="Refresh intelligence metrics"
+              className="px-3 py-1.5 rounded-lg border border-stone-200 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 flex items-center gap-1.5 transition"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Refresh</span>
@@ -157,94 +205,149 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
           </div>
         </div>
 
-        {/* Clinical Rationale & Non-Additive Stock Notice */}
-        <div className="text-xs text-stone-600 bg-stone-50 p-3.5 rounded-xl border border-stone-200/60 leading-relaxed">
-          <p className="font-semibold text-stone-800 mb-1">Clinical Provenance & Mapping Rationale:</p>
-          <p>{overview.rationale}</p>
-          {overview.stock_warning && (
-            <div className="mt-2.5 flex items-center gap-2 p-2 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-medium">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-              <span>{overview.stock_warning}</span>
+        {/* Provenance and Data Completeness Ribbon */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-[var(--border-subtle)] text-xs">
+          <div>
+            <p className="text-stone-500 font-medium">Reporting District</p>
+            <p className="text-sm font-bold text-stone-900">{overview.district}</p>
+          </div>
+          <div>
+            <p className="text-stone-500 font-medium">Reporting Subgroup</p>
+            <p className="text-sm font-bold text-stone-900">{overview.subgroup_type}</p>
+          </div>
+          <div>
+            <p className="text-stone-500 font-medium">Reporting Completeness</p>
+            <p className="text-sm font-bold text-emerald-700">
+              {(overview.completeness_ratio * 100).toFixed(1)}% ({overview.reported_months_count}/{overview.total_expected_months} Months)
+            </p>
+          </div>
+          <div>
+            <p className="text-stone-500 font-medium">Data Provenance</p>
+            <p className="text-sm font-bold text-stone-900 truncate" title={overview.provenance}>
+              {overview.provenance}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Phase 15A & 15C: Source Discovery & Cross-Year Comparability Overview */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200">
+                <FileText className="w-3.5 h-3.5" />
+                Multi-Year HMIS Archive
+              </span>
+              <span className="text-xs text-stone-500 font-semibold">Phase 15A & 15C</span>
             </div>
-          )}
+            <h3 className="text-base font-bold text-[var(--text-primary)]">
+              Source Discovery, Ingestion Readiness & Comparability
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-stone-100 text-stone-700">
+              State: Tamil Nadu
+            </span>
+          </div>
         </div>
+
+        {/* Source Registry Table */}
+        {sourceRegistry && (
+          <div className="border border-stone-200 rounded-xl overflow-hidden text-xs">
+            <table className="w-full text-left divide-y divide-stone-200">
+              <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="px-3.5 py-2.5">Financial Year</th>
+                  <th className="px-3.5 py-2.5">Status</th>
+                  <th className="px-3.5 py-2.5">Ingested Rows</th>
+                  <th className="px-3.5 py-2.5">Source Authority</th>
+                  <th className="px-3.5 py-2.5">Ingestion Capability</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 bg-white">
+                {sourceRegistry.sources.map((src) => {
+                  const isIngested = src.status === 'INGESTED';
+                  return (
+                    <tr key={src.financial_year} className="hover:bg-stone-50/50">
+                      <td className="px-3.5 py-2.5 font-bold text-stone-900">{src.financial_year}</td>
+                      <td className="px-3.5 py-2.5">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            isIngested
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}
+                        >
+                          {src.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-2.5 font-mono">
+                        {src.total_observations_ingested > 0 ? src.total_observations_ingested.toLocaleString() : '0'}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-stone-700 max-w-xs truncate" title={src.source_portal}>
+                        {src.source_portal}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-stone-600 font-mono text-[11px]">
+                        {src.ingestion_readiness}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Acquisition Blocker & Cross-Year Warning Notice */}
+        {comparability && comparability.comparability_warnings.length > 0 && (
+          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950 text-xs space-y-1.5">
+            <div className="flex items-center gap-2 font-bold text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Cross-Year Comparability Notice</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 text-amber-900/90 pl-1">
+              {comparability.comparability_warnings.map((w, idx) => (
+                <li key={idx}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {/* 2. Coverage & Completeness Ribbon */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Reporting Completeness</p>
-          <p className="text-2xl font-extrabold text-[var(--text-primary)] mt-1">
-            {(overview.completeness_ratio * 100).toFixed(1)}%
-          </p>
-          <p className="text-xs text-stone-500 mt-1">
-            {overview.reported_months_count} of {overview.total_expected_months} expected months
-          </p>
-        </div>
-
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Valid / Zero Returns</p>
-          <p className="text-2xl font-extrabold text-emerald-700 mt-1">
-            {overview.valid_months_count} / {overview.zero_months_count}
-          </p>
-          <p className="text-xs text-stone-500 mt-1">
-            {overview.zero_months_count} confirmed zero events
-          </p>
-        </div>
-
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Missing Months</p>
-          <p className="text-2xl font-extrabold text-rose-600 mt-1">
-            {overview.missing_months_count}
-          </p>
-          <p className="text-xs text-stone-500 mt-1">
-            {overview.missing_months_count === 0 ? 'Zero missing returns' : 'Unreported periods'}
-          </p>
-        </div>
-
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">12-Month Median</p>
-          <p className="text-2xl font-extrabold text-indigo-700 mt-1">
-            {overview.median_value !== null ? overview.median_value.toLocaleString() : 'N/A'}
-          </p>
-          <p className="text-xs text-stone-500 mt-1">
-            Mean: {overview.mean_value !== null ? overview.mean_value.toLocaleString() : 'N/A'} {overview.unit}
-          </p>
-        </div>
-      </div>
-
-      {/* 3. Monthly Trajectory Sequence */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-3">
-        <h3 className="text-sm font-bold text-stone-800 uppercase tracking-wider flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-stone-500" />
-          <span>Chronological Fiscal Trajectory (FY {overview.financial_year})</span>
+      {/* 3. Monthly Trajectory & Zero vs Missing Breakdown */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-4">
+        <h3 className="text-base font-bold text-[var(--text-primary)]">
+          Chronological Trajectory ({overview.financial_year})
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 pt-2">
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
           {overview.points.map((pt) => {
+            const isMissing = pt.is_missing;
             const isZero = pt.is_zero;
-            const isMiss = pt.is_missing;
             return (
               <div
                 key={pt.month}
                 className={`p-3 rounded-xl border text-center transition ${
-                  isMiss
-                    ? 'bg-rose-50/70 border-rose-200 text-rose-900'
+                  isMissing
+                    ? 'bg-rose-50/60 border-rose-200 text-rose-800'
                     : isZero
-                    ? 'bg-amber-50/70 border-amber-200 text-amber-900'
-                    : 'bg-emerald-50/60 border-emerald-200 text-emerald-900'
+                    ? 'bg-amber-50/60 border-amber-200 text-amber-800'
+                    : 'bg-white border-stone-200 text-stone-900 shadow-2xs'
                 }`}
               >
-                <p className="text-xs font-bold text-stone-600">{pt.month}</p>
-                <p className="text-base font-extrabold mt-1">
-                  {isMiss ? 'MISSING' : isZero ? '0' : pt.value?.toLocaleString()}
+                <p className="text-[11px] font-bold text-stone-500 mb-0.5">{pt.month}</p>
+                <p className="text-base font-extrabold">
+                  {isMissing ? 'MISSING' : isZero ? '0' : pt.value !== null ? pt.value.toLocaleString() : 'N/A'}
                 </p>
                 <span
-                  className={`inline-block mt-1 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                    isMiss
-                      ? 'bg-rose-200/60 text-rose-800'
+                  className={`inline-block mt-1 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                    isMissing
+                      ? 'bg-rose-200 text-rose-900'
                       : isZero
-                      ? 'bg-amber-200/60 text-amber-800'
-                      : 'bg-emerald-200/60 text-emerald-800'
+                      ? 'bg-amber-200 text-amber-900'
+                      : 'bg-emerald-100 text-emerald-900'
                   }`}
                 >
                   {pt.value_type}
@@ -255,48 +358,33 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
         </div>
       </div>
 
-      {/* 4. Forecasting Readiness & Baseline Models Section */}
+      {/* 4. Forecasting Readiness & Hold-Out Baseline Evaluation Section */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  readiness?.is_ready
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-amber-50 text-amber-800 border border-amber-200'
-                }`}
-              >
-                {readiness?.is_ready ? (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Eligible for Baseline Evaluation
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    {readiness?.readiness_status || 'Insufficient History'}
-                  </>
-                )}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-50 text-violet-800 border border-violet-200">
+                <Sparkles className="w-3.5 h-3.5" />
+                {readiness?.readiness_status ? readiness.readiness_status.replace(/_/g, ' ') : 'Forecasting Foundation'}
               </span>
-              <span className="text-xs text-stone-500 font-semibold">Phase 14C Evaluation</span>
+              <span className="text-xs text-stone-500 font-semibold">Phase 14C & 15D</span>
             </div>
             <h3 className="text-lg font-bold text-[var(--text-primary)]">
-              Forecasting Readiness & Chronological Baseline Evaluation
+              Chronological Hold-Out Evaluation & Baseline Projections
             </h3>
           </div>
 
           {/* Horizon Selector */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-stone-600">Horizon:</span>
-            {[1, 2, 3, 6, 12].map((h) => (
+            {[1, 2, 3].map((h) => (
               <button
                 key={h}
                 onClick={() => setHorizon(h)}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                   horizon === h
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                    : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                    ? 'bg-violet-600 text-white shadow-2xs'
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                 }`}
               >
                 {h}M
@@ -305,73 +393,80 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
           </div>
         </div>
 
-        {/* Dataset Limitation Disclosure */}
-        <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-900 text-xs space-y-2 leading-relaxed">
-          <div className="flex items-center gap-2 font-bold text-amber-950">
-            <Info className="w-4 h-4 text-amber-700 shrink-0" />
-            <span>Single-Year Dataset Limitation & Evaluation Governance:</span>
-          </div>
-          <p>{readiness?.dataset_limitation}</p>
-          <p className="font-medium text-stone-600">{readiness?.clinical_validation_disclaimer}</p>
+        {/* Evaluation Context & Single-Year Disclosure */}
+        <div className="p-3.5 rounded-xl bg-stone-100/80 border border-stone-200/80 text-stone-700 text-xs leading-relaxed space-y-1">
+          <p>
+            <strong className="text-stone-900">Single-Year Dataset Limitation:</strong>{' '}
+            {readiness?.dataset_limitation}
+          </p>
+          <p className="text-stone-500 italic">
+            Clinical Disclaimer: {readiness?.clinical_validation_disclaimer}
+          </p>
         </div>
 
-        {readiness?.is_ready ? (
+        {readiness && readiness.is_ready ? (
           <div className="space-y-6">
-            {/* Split Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs space-y-1">
-                <span className="font-bold text-stone-700 uppercase tracking-wider">Training Period (Zero Leakage)</span>
-                <p className="text-base font-extrabold text-stone-900">
-                  {readiness.training_period?.start_month} to {readiness.training_period?.end_month}
+            {/* Split Information Ribbon */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-violet-50/50 border border-violet-200/60">
+                <p className="text-violet-900 font-bold mb-1">
+                  Training Window (9 Months): {readiness.training_period?.start_month} –{' '}
+                  {readiness.training_period?.end_month}
                 </p>
-                <p className="text-stone-500">{readiness.training_period?.months_count} historical training months</p>
+                <p className="text-stone-600 text-[11px]">
+                  Models fit exclusively on the initial 9 months. Zero future-data leakage into evaluation.
+                </p>
               </div>
-              <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-200 text-xs space-y-1">
-                <span className="font-bold text-indigo-900 uppercase tracking-wider">Hold-Out Evaluation Period</span>
-                <p className="text-base font-extrabold text-indigo-950">
-                  {readiness.evaluation_period?.start_month} to {readiness.evaluation_period?.end_month}
+
+              <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/60">
+                <p className="text-emerald-900 font-bold mb-1">
+                  Evaluation Hold-Out ({readiness.requested_horizon} Months): {readiness.evaluation_period?.start_month}{' '}
+                  – {readiness.evaluation_period?.end_month}
                 </p>
-                <p className="text-indigo-700">{readiness.evaluation_period?.months_count} unseen test months</p>
+                <p className="text-stone-600 text-[11px]">
+                  Candidate forecasts tested strictly on unseen held-out historical observation points.
+                </p>
               </div>
             </div>
 
             {/* Model Comparison Table */}
             <div>
               <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                Candidate Baseline Models (Hold-Out Split Validation)
+                Candidate Baseline Evaluation
               </h4>
-              <div className="overflow-x-auto rounded-xl border border-stone-200">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-stone-100 text-stone-700 font-bold">
+              <div className="border border-stone-200 rounded-xl overflow-hidden text-xs">
+                <table className="w-full text-left divide-y divide-stone-200">
+                  <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="p-3">Baseline Model</th>
-                      <th className="p-3">Hold-Out MAE</th>
-                      <th className="p-3">Hold-Out RMSE</th>
-                      <th className="p-3">Hold-Out sMAPE</th>
-                      <th className="p-3">Hold-Out WAPE</th>
-                      <th className="p-3">Status</th>
+                      <th className="px-3.5 py-2.5">Model</th>
+                      <th className="px-3.5 py-2.5">Type</th>
+                      <th className="px-3.5 py-2.5">MAE</th>
+                      <th className="px-3.5 py-2.5">RMSE</th>
+                      <th className="px-3.5 py-2.5">MAPE</th>
+                      <th className="px-3.5 py-2.5">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-200 bg-white">
-                    {readiness.baseline_models_evaluated.map((m) => {
-                      const isSelected = m.model_name === readiness.selected_baseline_model;
+                  <tbody className="divide-y divide-stone-100 bg-white">
+                    {readiness.baseline_models_evaluated.map((mod) => {
+                      const isSelected = mod.model_name === readiness.selected_baseline_model;
+                      const m = mod.evaluation_metrics || (mod as any).metrics || { mae: 0, rmse: 0, mape: 0 };
                       return (
-                        <tr key={m.model_name} className={isSelected ? 'bg-indigo-50/40 font-semibold' : ''}>
-                          <td className="p-3 text-stone-900 flex items-center gap-2">
-                            {isSelected && <Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
-                            <span>{m.model_name}</span>
+                        <tr key={mod.model_name} className={isSelected ? 'bg-violet-50/40 font-semibold' : ''}>
+                          <td className="px-3.5 py-2.5 text-stone-900 flex items-center gap-1.5">
+                            {isSelected && <Sparkles className="w-3.5 h-3.5 text-violet-600" />}
+                            <span>{mod.model_name}</span>
                           </td>
-                          <td className="p-3 font-mono">{m.evaluation_metrics.mae.toFixed(2)}</td>
-                          <td className="p-3 font-mono">{m.evaluation_metrics.rmse.toFixed(2)}</td>
-                          <td className="p-3 font-mono">{m.evaluation_metrics.smape.toFixed(2)}%</td>
-                          <td className="p-3 font-mono">{m.evaluation_metrics.wape.toFixed(2)}%</td>
-                          <td className="p-3">
+                          <td className="px-3.5 py-2.5 text-stone-600 font-mono">{(mod as any).model_type || 'Baseline'}</td>
+                          <td className="px-3.5 py-2.5 font-mono">{m.mae.toLocaleString()}</td>
+                          <td className="px-3.5 py-2.5 font-mono">{m.rmse.toLocaleString()}</td>
+                          <td className="px-3.5 py-2.5 font-mono">{m.mape}%</td>
+                          <td className="px-3.5 py-2.5">
                             {isSelected ? (
-                              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800">
-                                SELECTED BEST
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-violet-100 text-violet-800">
+                                Selected
                               </span>
                             ) : (
-                              <span className="text-stone-400">Baseline</span>
+                              <span className="text-stone-400 text-[11px]">Candidate</span>
                             )}
                           </td>
                         </tr>
@@ -411,16 +506,16 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
         )}
       </div>
 
-      {/* 5. Conservative Anomaly & Change Detection Section */}
+      {/* 5. Phase 15E: Conservative Anomaly & Operational Review Workflow */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xs space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200">
                 <ShieldAlert className="w-3.5 h-3.5" />
-                Conservative Early-Warning
+                Early-Warning & Review
               </span>
-              <span className="text-xs text-stone-500 font-semibold">Phase 14D</span>
+              <span className="text-xs text-stone-500 font-semibold">Phase 14D & 15E</span>
             </div>
             <h3 className="text-lg font-bold text-[var(--text-primary)]">
               Statistical Anomaly & Operational Change Signals
@@ -436,9 +531,8 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
           <Info className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" />
           <p>
             <strong className="text-stone-900">Governance & Usage Boundary:</strong> Statistical anomaly signals
-            represent mathematical dispersion (Median Absolute Deviation & Volatility Threshing). They indicate data
-            patterns requiring human review by HMIS officers and do <em>not</em> constitute clinical diagnoses, disease
-            outbreaks, or evidence of reporting fraud.
+            indicate data patterns requiring human clinical review. The administrative review workflow records
+            acknowledgement, notes, and resolution actions in an immutable audit trail without modifying historical observations.
           </p>
         </div>
 
@@ -448,15 +542,17 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
             {anomalies.signals.map((sig) => {
               const isElevated = sig.severity === 'ELEVATED';
               const isWarning = sig.severity === 'WARNING';
+              const reviewStatus = sig.review_status || 'OPEN';
+
               return (
                 <div
                   key={sig.signal_id}
-                  className={`p-4 rounded-xl border text-xs space-y-2 transition ${
+                  className={`p-4 rounded-xl border text-xs space-y-3 transition ${
                     isElevated
-                      ? 'bg-rose-50/60 border-rose-200/80 text-rose-950'
+                      ? 'bg-rose-50/50 border-rose-200/80'
                       : isWarning
-                      ? 'bg-amber-50/60 border-amber-200/80 text-amber-950'
-                      : 'bg-stone-50 border-stone-200 text-stone-900'
+                      ? 'bg-amber-50/50 border-amber-200/80'
+                      : 'bg-stone-50 border-stone-200'
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -480,8 +576,32 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
                       </span>
                     </div>
 
-                    <div className="font-mono font-bold text-stone-700">
-                      Score: {sig.deviation_score}x
+                    <div className="flex items-center gap-2">
+                      {/* Review Status Badge */}
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          reviewStatus === 'RESOLVED'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : reviewStatus === 'UNDER_REVIEW'
+                            ? 'bg-purple-50 text-purple-800 border-purple-300'
+                            : reviewStatus === 'ACKNOWLEDGED'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300'
+                            : reviewStatus === 'REOPENED'
+                            ? 'bg-rose-50 text-rose-800 border-rose-300'
+                            : 'bg-stone-100 text-stone-700 border-stone-300'
+                        }`}
+                      >
+                        Status: {reviewStatus}
+                      </span>
+
+                      {/* Review Action Trigger Button */}
+                      <button
+                        onClick={() => handleOpenReviewModal(sig)}
+                        className="px-2.5 py-1 rounded bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 text-[11px] font-semibold flex items-center gap-1 shadow-2xs transition"
+                      >
+                        <UserCheck className="w-3 h-3 text-stone-600" />
+                        <span>Review & Audit</span>
+                      </button>
                     </div>
                   </div>
 
@@ -491,7 +611,16 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
 
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-500 pt-1 border-t border-stone-200/60 font-mono">
                     <span>Method: {sig.statistical_method}</span>
-                    <span>Observed: {sig.observed_value !== null ? sig.observed_value.toLocaleString() : 'MISSING'} | Baseline: {sig.expected_baseline !== null ? sig.expected_baseline?.toLocaleString() : 'N/A'}</span>
+                    <span>
+                      Observed: {sig.observed_value !== null ? sig.observed_value.toLocaleString() : 'MISSING'} |
+                      Baseline: {sig.expected_baseline !== null ? sig.expected_baseline?.toLocaleString() : 'N/A'}
+                    </span>
+                    {sig.last_reviewed_by_username && (
+                      <span className="text-stone-600">
+                        Last review: {sig.last_reviewed_by_username} (
+                        {sig.last_reviewed_at ? sig.last_reviewed_at.split('T')[0] : ''})
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -507,6 +636,136 @@ export const DistrictIntelligenceTab: React.FC<DistrictIntelligenceTabProps> = (
           </div>
         )}
       </div>
+
+      {/* Review & Audit Modal (Phase 15E) */}
+      {selectedSignal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="bg-white border border-stone-200 rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-600" />
+                <h3 className="text-sm font-bold text-stone-900">
+                  Anomaly Signal Review & Governance
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedSignal(null)}
+                className="text-stone-400 hover:text-stone-600 p-1 rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Signal Details Summary */}
+            <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 font-mono text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-stone-500">Signal ID:</span>
+                <span className="font-bold text-stone-900">{selectedSignal.signal_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">District & Month:</span>
+                <span className="font-bold text-stone-900">
+                  {selectedSignal.district} ({selectedSignal.reporting_month})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Current Status:</span>
+                <span className="font-bold text-violet-700">
+                  {activeReviewDetail?.current_status || selectedSignal.review_status || 'OPEN'}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              <p className="font-bold text-stone-700">Administrative Transition Action:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button
+                  disabled={reviewActionLoading}
+                  onClick={() => handleExecuteReviewAction('ACKNOWLEDGE')}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold transition disabled:opacity-50"
+                >
+                  Acknowledge
+                </button>
+                <button
+                  disabled={reviewActionLoading}
+                  onClick={() => handleExecuteReviewAction('SET_UNDER_REVIEW')}
+                  className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 font-bold transition disabled:opacity-50"
+                >
+                  Under Review
+                </button>
+                <button
+                  disabled={reviewActionLoading}
+                  onClick={() => handleExecuteReviewAction('RESOLVE')}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold transition disabled:opacity-50"
+                >
+                  Resolve
+                </button>
+                <button
+                  disabled={reviewActionLoading}
+                  onClick={() => handleExecuteReviewAction('REOPEN')}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-300 font-bold transition disabled:opacity-50"
+                >
+                  Reopen
+                </button>
+              </div>
+            </div>
+
+            {/* Notes / Reason Textarea */}
+            <div className="space-y-1">
+              <label className="font-bold text-stone-700 flex items-center gap-1">
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Audit Note / Resolution Explanation:</span>
+              </label>
+              <textarea
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                placeholder="Enter field investigation findings, data-entry correction, or resolution rationale..."
+                className="w-full h-20 p-2.5 rounded-lg border border-stone-200 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+              />
+              <button
+                disabled={reviewActionLoading || !reviewNote.trim()}
+                onClick={() => handleExecuteReviewAction('ADD_NOTE')}
+                className="px-3 py-1 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold border border-stone-300 transition text-[11px] disabled:opacity-40"
+              >
+                Add Note Only
+              </button>
+            </div>
+
+            {reviewActionError && (
+              <p className="text-rose-600 font-bold text-[11px]">{reviewActionError}</p>
+            )}
+
+            {/* Audit History Timeline */}
+            <div className="pt-3 border-t border-stone-200 space-y-2">
+              <h4 className="font-bold text-stone-800 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-stone-500" />
+                <span>Immutable Review Audit Trail</span>
+              </h4>
+
+              {activeReviewDetail && activeReviewDetail.actions.length > 0 ? (
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {activeReviewDetail.actions.map((act) => (
+                    <div key={act.id} className="p-2 rounded-lg bg-stone-50 border border-stone-200 space-y-0.5">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="font-bold text-stone-900">{act.username}</span>
+                        <span className="text-stone-400 font-mono">{act.created_at.split('.')[0]}</span>
+                      </div>
+                      <p className="text-[11px] font-semibold text-stone-700">
+                        {act.action}: <span className="font-mono">{act.from_status}</span> &rarr;{' '}
+                        <span className="font-mono">{act.to_status}</span>
+                      </p>
+                      {act.notes && <p className="text-[11px] text-stone-600 italic">"{act.notes}"</p>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-stone-400 italic text-[11px]">No previous review actions logged.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

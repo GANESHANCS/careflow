@@ -12,6 +12,12 @@ from backend.app.services.analytics.healthcare_intelligence import (
     HealthcareIntelligenceService,
     IneligibleIndicatorError,
 )
+from backend.app.services.analytics.source_registry import SourceRegistryCatalog, SourceRegistrySummary
+from backend.app.services.analytics.cross_year_comparability import (
+    CrossYearComparabilityService,
+    CrossYearComparabilityReport,
+)
+from backend.app.services.analytics.anomaly_review_service import DistrictAnomalyReviewService
 from backend.app.schemas.district_analytics import (
     DistrictCatalogResponse,
     DistrictIndicatorCatalogResponse,
@@ -23,6 +29,9 @@ from backend.app.schemas.district_analytics import (
     VerifiedIndicatorOverviewResponse,
     ForecastingReadinessResponse,
     DistrictAnomalyReportResponse,
+    DistrictAnomalyReviewSchema,
+    DistrictAnomalyReviewActionSchema,
+    AnomalyReviewActionRequest,
 )
 
 router = APIRouter()
@@ -295,3 +304,150 @@ def detect_district_anomalies(
         )
     except IneligibleIndicatorError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/intelligence/source-registry", response_model=SourceRegistrySummary)
+def get_source_registry(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 15A: Returns registered HMIS data sources, file hashes, ingestion readiness,
+    and official government data acquisition status for Tamil Nadu.
+    """
+    from sqlalchemy import func
+    from backend.app.db.models.district_observation import DistrictObservation
+    fy_counts = dict(
+        db.query(DistrictObservation.financial_year, func.count(DistrictObservation.id))
+        .group_by(DistrictObservation.financial_year)
+        .all()
+    )
+    return SourceRegistryCatalog.get_summary(fy_counts)
+
+
+@router.get("/intelligence/cross-year-comparability", response_model=CrossYearComparabilityReport)
+def get_cross_year_comparability(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 15C: Evaluates cross-year data quality, schema stability, missing months,
+    district boundary bifurcations, and indicator semantic consistency.
+    """
+    return CrossYearComparabilityService.get_comparability_report(db)
+
+
+@router.get("/intelligence/anomalies/reviews", response_model=List[DistrictAnomalyReviewSchema])
+def list_anomaly_reviews(
+    district: Optional[str] = Query(None, description="Filter by district"),
+    indicator_id: Optional[str] = Query(None, description="Filter by indicator ID"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (OPEN, ACKNOWLEDGED, UNDER_REVIEW, RESOLVED, REOPENED)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 15E: Lists administrative review records and audit history for anomaly signals.
+    """
+    reviews = DistrictAnomalyReviewService.list_reviews(
+        db=db,
+        district=district,
+        indicator_id=indicator_id,
+        status_filter=status_filter,
+        limit=limit,
+        offset=offset
+    )
+    res = []
+    for r in reviews:
+        actions_schema = [
+            DistrictAnomalyReviewActionSchema(
+                id=a.id,
+                review_id=a.review_id,
+                action=a.action,
+                from_status=a.from_status,
+                to_status=a.to_status,
+                notes=a.notes,
+                username=a.username,
+                created_at=a.created_at.isoformat()
+            )
+            for a in r.actions
+        ]
+        res.append(
+            DistrictAnomalyReviewSchema(
+                id=r.id,
+                signal_id=r.signal_id,
+                district=r.district,
+                indicator_id=r.indicator_id,
+                reporting_month=r.reporting_month,
+                signal_type=r.signal_type,
+                severity=r.severity,
+                current_status=r.current_status,
+                trigger_reason=r.trigger_reason,
+                metric_value=r.metric_value,
+                expected_range=r.expected_range,
+                last_reviewed_by_username=r.last_reviewed_by_username,
+                last_reviewed_at=r.last_reviewed_at.isoformat() if r.last_reviewed_at else None,
+                resolution_reason=r.resolution_reason,
+                actions=actions_schema
+            )
+        )
+    return res
+
+
+@router.post("/intelligence/anomalies/reviews/{signal_id}/action", response_model=DistrictAnomalyReviewSchema)
+def apply_anomaly_review_action(
+    signal_id: str,
+    payload: AnomalyReviewActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Phase 15E: Applies an administrative review transition (ACKNOWLEDGE, SET_UNDER_REVIEW,
+    RESOLVE, REOPEN, ADD_NOTE) with user attribution and immutable audit logging.
+    Requires ADMIN or ANALYST role.
+    """
+    review = DistrictAnomalyReviewService.apply_review_action(
+        db=db,
+        signal_id=signal_id,
+        action=payload.action,
+        notes=payload.notes,
+        current_user=current_user,
+        district=payload.district,
+        indicator_id=payload.indicator_id,
+        reporting_month=payload.reporting_month,
+        signal_type=payload.signal_type,
+        trigger_reason=payload.trigger_reason,
+        metric_value=payload.metric_value,
+        expected_range=payload.expected_range
+    )
+    actions_schema = [
+        DistrictAnomalyReviewActionSchema(
+            id=a.id,
+            review_id=a.review_id,
+            action=a.action,
+            from_status=a.from_status,
+            to_status=a.to_status,
+            notes=a.notes,
+            username=a.username,
+            created_at=a.created_at.isoformat()
+        )
+        for a in review.actions
+    ]
+    return DistrictAnomalyReviewSchema(
+        id=review.id,
+        signal_id=review.signal_id,
+        district=review.district,
+        indicator_id=review.indicator_id,
+        reporting_month=review.reporting_month,
+        signal_type=review.signal_type,
+        severity=review.severity,
+        current_status=review.current_status,
+        trigger_reason=review.trigger_reason,
+        metric_value=review.metric_value,
+        expected_range=review.expected_range,
+        last_reviewed_by_username=review.last_reviewed_by_username,
+        last_reviewed_at=review.last_reviewed_at.isoformat() if review.last_reviewed_at else None,
+        resolution_reason=review.resolution_reason,
+        actions=actions_schema
+    )

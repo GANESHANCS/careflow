@@ -54,6 +54,27 @@ class DistrictHMISAdapter:
         return DistrictMonthlyTabularV1Profile.validate_headers(headers)
 
     @classmethod
+    def detect_financial_year(cls, filename_or_path: str, default: str = "2015-16") -> str:
+        """
+        Infers Indian financial year (e.g. '2016-17') from filename or text metadata.
+        Supports patterns like '2016-17', '2016_17', 'for-2016-17', '2016-2017'.
+        """
+        raw = str(filename_or_path).strip()
+        match = re.search(r"(\d{4})[-_](\d{2,4})", raw)
+        if match:
+            start_yr = int(match.group(1))
+            end_yr_part = match.group(2)
+            if len(end_yr_part) == 4:
+                end_yr_short = int(end_yr_part) % 100
+            else:
+                end_yr_short = int(end_yr_part)
+            century = (start_yr // 100) * 100
+            full_end = century + end_yr_short
+            if full_end == start_yr + 1:
+                return f"{start_yr}-{end_yr_short:02d}"
+        return default
+
+    @classmethod
     def get_fiscal_month_mapping(cls, financial_year: str = "2015-16") -> Dict[str, Tuple[str, str]]:
         """
         Validates the Indian financial year string (e.g. '2015-16') and returns
@@ -164,7 +185,8 @@ class DistrictHMISAdapter:
         Converts wide-format district HMIS DataFrame into normalized long-format records.
         Returns: (long_records, errors)
         """
-        month_mapping = cls.get_fiscal_month_mapping(financial_year)
+        effective_fy = cls.detect_financial_year(source_file) if financial_year == "auto" else financial_year
+        month_mapping = cls.get_fiscal_month_mapping(effective_fy)
         ingested_at = datetime.now(timezone.utc).isoformat()
 
         long_records: List[Dict[str, Any]] = []
@@ -236,7 +258,7 @@ class DistrictHMISAdapter:
                     "subgroup_type": raw_type,
                     "is_subgroup_total": is_sub_total,
                     "indicator_id": ind_id,
-                    "financial_year": financial_year,
+                    "financial_year": effective_fy,
                     "reporting_month": m_period,
                     "observation_date": m_date,
                     "value": num_val,

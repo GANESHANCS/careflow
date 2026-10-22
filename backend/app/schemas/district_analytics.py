@@ -246,6 +246,9 @@ class AnomalySignalItem(BaseModel):
     statistical_method: str
     rationale: str
     data_points_used: int
+    review_status: str = "OPEN"
+    last_reviewed_by_username: Optional[str] = None
+    last_reviewed_at: Optional[str] = None
     disclaimer: str = (
         "STATISTICAL_SIGNAL — Indicates statistical variation requiring HMIS officer review. "
         "Not a clinical diagnosis, disease outbreak alert, or evidence of reporting fraud."
@@ -264,3 +267,48 @@ class DistrictAnomalyReportResponse(BaseModel):
         "Statistical anomaly detection utilizes robust non-parametric estimation (Median Absolute Deviation). "
         "All alerts require human clinical and operational validation before administrative action."
     )
+
+
+# ===========================================================================
+# Phase 15: Anomaly Review Workflow & Governance Schemas
+# ===========================================================================
+
+class DistrictAnomalyReviewActionSchema(BaseModel):
+    id: int
+    review_id: str
+    action: str
+    from_status: str
+    to_status: str
+    notes: Optional[str] = None
+    username: str
+    created_at: str
+
+
+class DistrictAnomalyReviewSchema(BaseModel):
+    id: str
+    signal_id: str
+    district: str
+    indicator_id: str
+    reporting_month: str
+    signal_type: str
+    severity: str
+    current_status: str
+    trigger_reason: str
+    metric_value: Optional[float] = None
+    expected_range: Optional[str] = None
+    last_reviewed_by_username: Optional[str] = None
+    last_reviewed_at: Optional[str] = None
+    resolution_reason: Optional[str] = None
+    actions: List[DistrictAnomalyReviewActionSchema] = []
+
+
+class AnomalyReviewActionRequest(BaseModel):
+    action: str = Field(..., description="ACKNOWLEDGE, SET_UNDER_REVIEW, RESOLVE, REOPEN, or ADD_NOTE")
+    notes: Optional[str] = Field(None, description="Clinical or administrative explanation / audit note")
+    district: Optional[str] = None
+    indicator_id: Optional[str] = None
+    reporting_month: Optional[str] = None
+    signal_type: Optional[str] = None
+    trigger_reason: Optional[str] = None
+    metric_value: Optional[float] = None
+    expected_range: Optional[str] = None

@@ -1,6 +1,6 @@
 # CAREFlow Project Status & Progress Tracker
 
-## Current Phase: PHASE 14 — HEALTHCARE INTELLIGENCE, FORECASTING FOUNDATION & EARLY-WARNING ANALYTICS (COMPLETE & VERIFIED)
+## Current Phase: PHASE 15 — MULTI-YEAR HMIS DATA INTEGRATION & ANOMALY REVIEW WORKFLOW (COMPLETE & VERIFIED)
 
 ### Completed Phases
 - **PHASE 0 (Research & Architecture Review)**: Complete.
@@ -35,12 +35,14 @@
 - **PHASE 12 (Streaming CSV Exports, Indicator Registry & Security Audit)**: Complete & Verified.
 - **PHASE 13 (Indicator Audit, Ambiguity Classifications & Export Subgroup Fix)**: Complete & Verified.
 - **PHASE 14 (Healthcare Intelligence, Forecasting Foundation & Early-Warning Analytics)**: Complete & Verified.
+- **PHASE 15 (Multi-Year HMIS Data Integration & Anomaly Review Workflow)**: Complete & Verified.
 
 ---
 
 ## REAL HMIS FILE AVAILABILITY STATUS
 **OFFICIAL STATE HMIS DATA INGESTED**: **175,872 RECORDS INGESTED (TAMIL NADU FY 2015–16)**
 *The platform hosts official consolidated district returns covering all 32 revenue districts across 12 calendar months (April 2015 – March 2016) in the dedicated `district_observations` table. Structural isolation is enforced between district-level administrative returns and granular clinical facility observations (`observations`: 362 records).*
+*Multi-year cataloging: FY 2016–17 and FY 2017–18 official source files are cataloged with status `BLOCKED_MISSING_OFFICIAL_FILE` requiring authorized portal credentials/session on the MoHFW HMIS portal. Zero synthetic records have been fabricated; multi-year ingestion pipelines stand ready for ingestion upon official file acquisition.*
 
 ---
 
@@ -48,10 +50,10 @@
 
 | Component / Test Suite | Command | Result | Details |
 | :--- | :--- | :--- | :--- |
-| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **206/206 passed** (Phases 1–14 full suites passing without failures) |
+| **Full Pytest Backend Suite** | `pytest` | **PASSED** | **218/218 passed** (Phases 1–15 full suites passing without failures, 12 new Phase 15 tests) |
 | **Full Vitest Frontend Suite** | `npm test -- --run` (in `frontend/`) | **PASSED** | **79/79 passed** (All 14 test files passing across Landing, Overview, Facilities, Forecast, Imports, and Districts intelligence tabs) |
 | **Frontend Production Build** | `npm run build` (in `frontend/`) | **PASSED** | React 19 + TypeScript + Vite build succeeded with **0 errors, 0 warnings** |
-| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 13 tables |
+| **Database Integrity** | `PRAGMA integrity_check` | **PASSED** | Integrity check OK; record counts exactly preserved across all 13 original tables (175,872 district_observations, 362 observations) |
 | **Git Diff Format & Hygiene** | `git diff --check` | **PASSED** | Exit code 0 (zero trailing whitespace, zero formatting anomalies) |
 
 ---
@@ -238,3 +240,47 @@
 | **Cancellation & Rollback** | Race condition tests + before-images | **PASSED** | Atomic reversibility verified with no data corruption |
 | **Observability & Health** | `/api/health`, `/healthz`, `/readyz` | **PASSED** | Probes verified with distributed request tracing |
 | **Real vs Synthetic Data** | Baseline disclosure | **DISCLOSED** | Transparently documented that development metrics use synthetic baselines |
+
+---
+
+## Phase 15 Deliverables (Multi-Year HMIS Ingestion & Anomaly Review Workflow)
+
+1. **Source Discovery & Data Acquisition Readiness (Phase 15A)**:
+   * Cataloged official state returns in `backend/app/services/analytics/source_registry.py` (`SourceRegistryCatalog`).
+   * FY 2015–16: 175,872 observations ingested from official MoHFW consolidated return file `District wise Monthly report 2015-16.xlsx` (`sha256: 7e73d32ef3...`).
+   * FY 2016–17 & FY 2017–18: Documented with status `BLOCKED_MISSING_OFFICIAL_FILE` requiring authenticated portal retrieval. Zero synthetic records fabricated.
+   * REST Endpoint: `GET /api/analytics/district/intelligence/source-registry`.
+
+2. **Multi-Year Ingestion Pipeline (Phase 15B)**:
+   * Dynamic financial year extraction via `detect_financial_year()` in `backend/app/services/imports/district_adapter.py`.
+   * Normalization of FY string formats (`YYYY-YY`) and calendar months (`1..12`).
+   * Ingestion service (`import_service.py`) dynamically creates `ImportJob` with extracted financial year metadata, preserving idempotency and district/facility isolation.
+
+3. **Cross-Year Data Quality & Comparability Service (Phase 15C)**:
+   * `backend/app/services/analytics/cross_year_comparability.py` checks 12-month calendar completeness per financial year.
+   * Tracks 32 historical districts (FY 2015–16 baseline) and catalogs 6 post-2018 administrative bifurcations (Tenkasi, Chengalpattu, Tirupathur, Ranipet, Kallakurichi, Mayiladuthurai) to prevent misleading cross-year comparisons.
+   * Compares indicator definitions, units, and code stability across years.
+   * REST Endpoint: `GET /api/analytics/district/intelligence/cross-year-comparability`.
+
+4. **Multi-Year Forecasting Evaluation (Phase 15D)**:
+   * Chronological rolling-origin/expanding-window forecasting evaluation framework in `backend/app/services/analytics/healthcare_intelligence.py`.
+   * Explicit `INSUFFICIENT_HISTORY` diagnostic emitted when historical observations span $<24$ months, preventing premature or invalid seasonal forecasting claims.
+   * Zero data leakage: strict separation between training horizons and evaluation periods.
+
+5. **Anomaly Administrative Review & Audit Workflow (Phase 15E)**:
+   * Database Models: `DistrictAnomalyReview` and `DistrictAnomalyReviewAction` in `backend/app/db/models/anomaly_review.py`.
+   * Alembic Migration: `d3e4f5a6b7c8_add_phase_15_anomaly_review_workflow.py`.
+   * State Machine: `OPEN -> ACKNOWLEDGED -> UNDER_REVIEW -> RESOLVED -> REOPENED`.
+   * RBAC Enforcement: `ADMIN` and `ANALYST` permitted; `VIEWER` rejected with HTTP 403 Forbidden.
+   * Immutable audit logging preserving user ID, action timestamp, transition state, and resolution notes.
+   * REST Endpoints:
+     * `GET /api/analytics/district/intelligence/anomalies/reviews`
+     * `POST /api/analytics/district/intelligence/anomalies/reviews/{signal_id}/action`
+
+6. **Frontend District Intelligence Workspace Integration (Phase 15F)**:
+   * `frontend/src/components/districts/DistrictIntelligenceTab.tsx`:
+     * Multi-year Source Registry table showing reporting period, record counts, and provenance.
+     * Cross-year comparability notices detailing reporting completeness and district boundary shifts.
+     * Interactive Anomaly Review modal allowing review state transitions, note additions, and audit history inspection.
+   * `frontend/src/api/client.ts` & `frontend/src/api/types.ts`: API clients and type definitions for Phase 15 endpoints.
+   * `frontend/src/pages/DistrictsPage.test.tsx`: Extended tests to mock all Phase 15 client calls cleanly.

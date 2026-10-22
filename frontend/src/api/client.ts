@@ -37,6 +37,10 @@ import type {
   VerifiedIndicatorOverviewResponse,
   ForecastingReadinessResponse,
   DistrictAnomalyReportResponse,
+  SourceRegistrySummary,
+  CrossYearComparabilityReport,
+  DistrictAnomalyReviewItem,
+  AnomalyReviewActionRequest,
 } from './types';
 
 const API_BASE_URL = '/api';
@@ -514,5 +518,44 @@ export const api = {
     if (params?.financial_year) query.append('financial_year', params.financial_year);
     const qStr = query.toString();
     return fetchJson<DistrictAnomalyReportResponse>(`/analytics/district/intelligence/anomalies${qStr ? `?${qStr}` : ''}`);
+  },
+
+  // Phase 15: Source Registry, Cross-Year Comparability & Anomaly Review
+  getDistrictSourceRegistry: (): Promise<SourceRegistrySummary> => {
+    return fetchJson<SourceRegistrySummary>('/analytics/district/intelligence/source-registry');
+  },
+
+  getCrossYearComparability: (): Promise<CrossYearComparabilityReport> => {
+    return fetchJson<CrossYearComparabilityReport>('/analytics/district/intelligence/cross-year-comparability');
+  },
+
+  getDistrictAnomalyReviews: (params?: {
+    district?: string;
+    indicator_id?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<DistrictAnomalyReviewItem[]> => {
+    const query = new URLSearchParams();
+    if (params?.district) query.append('district', params.district);
+    if (params?.indicator_id) query.append('indicator_id', params.indicator_id);
+    if (params?.status) query.append('status', params.status);
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.offset) query.append('offset', String(params.offset));
+    const qStr = query.toString();
+    return fetchJson<DistrictAnomalyReviewItem[]>(`/analytics/district/intelligence/anomalies/reviews${qStr ? `?${qStr}` : ''}`);
+  },
+
+  postDistrictAnomalyReviewAction: (
+    signalId: string,
+    payload: AnomalyReviewActionRequest
+  ): Promise<DistrictAnomalyReviewItem> => {
+    return fetchJson<DistrictAnomalyReviewItem>(
+      `/analytics/district/intelligence/anomalies/reviews/${encodeURIComponent(signalId)}/action`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
   },
 };

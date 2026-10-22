@@ -594,9 +594,10 @@ class HMISImportService:
         """
         try:
             df = pd.read_csv(file_path, low_memory=False)
+            detected_fy = DistrictHMISAdapter.detect_financial_year(job.original_filename)
             long_records, parse_errors = DistrictHMISAdapter.extract_long_records(
                 df=df,
-                financial_year="2015-16",
+                financial_year=detected_fy,
                 state="Tamil Nadu",
                 source_file=job.original_filename
             )
